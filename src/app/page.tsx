@@ -1,103 +1,365 @@
-import Image from "next/image";
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ArrowRight, Users, Target, Heart, DollarSign, Calendar, Star, Facebook, Instagram } from "lucide-react"
+import Image from "next/image"
+import Link from "next/link"
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
+      {/* Navigation */}
+      <nav className="bg-white/80 backdrop-blur-md border-b border-primary-100 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-lg"></div>
+              <span className="text-xl font-bold text-gray-900">CC Tecate</span>
+            </div>
+            <Link href="/portal">
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                Portal de Usuarios
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section className="relative py-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="space-y-8">
+              <div className="space-y-4">
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
+                  Transforma tu vida,{" "}
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-green-600">
+                    despierta tu liderazgo
+                  </span>
+                </h1>
+                <p className="text-xl text-gray-600 leading-relaxed">
+                  Únete a nuestra comunidad y descubre el poder de la inteligencia emocional, 
+                  las metas personales y el crecimiento en comunidad.
+                </p>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button size="lg" className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-black">
+                  Inscríbete ahora
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+                <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Conoce más
+                </Button>
+              </div>
+            </div>
+            
+            <div className="relative">
+              <div className="aspect-square relative rounded-2xl overflow-hidden shadow-2xl">
         <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
+                  src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2071&q=80"
+                  alt="Comunidad de liderazgo"
+                  fill
+                  className="object-cover"
           priority
         />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+              </div>
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+      </section>
+
+      {/* Sobre el programa */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              Nuestro Proceso de Transformación
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Un viaje estructurado de crecimiento personal diseñado para despertar tu máximo potencial
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            <Card className="text-center border-2 border-primary-100 hover:border-primary-300 transition-colors">
+              <CardHeader>
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Calendar className="h-8 w-8 text-blue-600" />
+                </div>
+                <CardTitle className="text-2xl text-gray-800">Nivel Básico</CardTitle>
+                <CardDescription className="text-lg text-gray-700">
+                  Fin de semana intensivo de autoconocimiento
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600">
+                  Descubre tus fortalezas, identifica áreas de mejora y establece las bases 
+                  para tu transformación personal.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="text-center border-2 border-green-100 hover:border-green-300 transition-colors">
+              <CardHeader>
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Target className="h-8 w-8 text-green-600" />
+                </div>
+                <CardTitle className="text-2xl text-gray-800">Nivel Avanzado</CardTitle>
+                <CardDescription className="text-lg text-gray-700">
+                  2 semanas después del básico
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600">
+                  Profundiza en tus metas personales, desarrolla mecanismos de acción 
+                  y comienza a construir tu plan de vida.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="text-center border-2 border-yellow-100 hover:border-yellow-300 transition-colors">
+              <CardHeader>
+                <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Star className="h-8 w-8 text-yellow-600" />
+                </div>
+                <CardTitle className="text-2xl text-gray-800">Programa de Liderazgo</CardTitle>
+                <CardDescription className="text-lg text-gray-700">
+                  PL1, PL2, PL3 - Evolución continua
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600">
+                  Conviértete en líder de tu propia vida y de tu comunidad. 
+                  Programa de seguimiento y crecimiento continuo.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Beneficios */}
+      <section className="py-20 bg-gradient-to-br from-blue-50 to-green-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-6">
+                Beneficios que Transformarán tu Vida
+              </h2>
+              <div className="space-y-6">
+                <div className="flex items-start space-x-4">
+                  <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                    <Heart className="h-5 w-5 text-pink-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-2">Inteligencia Emocional</h3>
+                    <p className="text-gray-600">Desarrolla la capacidad de reconocer, entender y gestionar tus emociones de manera efectiva.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-4">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                    <Target className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-2">Metas Personales</h3>
+                    <p className="text-gray-600">Aprende a establecer y alcanzar objetivos claros en todas las áreas de tu vida.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-4">
+                  <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                    <DollarSign className="h-5 w-5 text-yellow-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-2">Bienestar Financiero</h3>
+                    <p className="text-gray-600">Desarrolla una relación saludable con el dinero y construye tu libertad financiera.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-4">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                    <Users className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-2">Comunidad de Apoyo</h3>
+                    <p className="text-gray-600">Conecta con personas que comparten tus valores y objetivos de crecimiento.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="aspect-square relative rounded-2xl overflow-hidden shadow-2xl">
+            <Image
+                  src="https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80"
+                  alt="Crecimiento personal"
+                  fill
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonios */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              Lo que dicen nuestros participantes
+            </h2>
+            <p className="text-xl text-gray-600">
+              Historias reales de transformación y crecimiento
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            <Card className="border-primary-100">
+              <CardContent className="pt-6">
+                <div className="flex items-center mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                  ))}
+                </div>
+                <p className="text-gray-600 mb-4">
+                  &ldquo;CC Tecate cambió completamente mi perspectiva sobre el liderazgo. 
+                  Ahora tengo claridad en mis metas y la confianza para alcanzarlas.&rdquo;
+                </p>
+                <div className="flex items-center">
+                  <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center mr-3">
+                    <span className="text-primary-600 font-semibold">M</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">María González</p>
+                    <p className="text-sm text-gray-500">Generación C1</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-secondary-100">
+              <CardContent className="pt-6">
+                <div className="flex items-center mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                  ))}
+                </div>
+                <p className="text-gray-600 mb-4">
+                  &ldquo;La comunidad que encontré aquí es invaluable. El apoyo mutuo y 
+                  la motivación constante me han ayudado a crecer como persona y profesional.&rdquo;
+                </p>
+                <div className="flex items-center">
+                  <div className="w-10 h-10 bg-secondary-100 rounded-full flex items-center justify-center mr-3">
+                    <span className="text-secondary-600 font-semibold">C</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">Carlos Rodríguez</p>
+                    <p className="text-sm text-gray-500">Generación C2</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-accent-100">
+              <CardContent className="pt-6">
+                <div className="flex items-center mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                  ))}
+                </div>
+                <p className="text-gray-600 mb-4">
+                  &ldquo;El programa me enseñó que el liderazgo comienza con uno mismo. 
+                  Ahora soy más consciente de mis emociones y cómo impactan a los demás.&rdquo;
+                </p>
+                <div className="flex items-center">
+                  <div className="w-10 h-10 bg-accent-100 rounded-full flex items-center justify-center mr-3">
+                    <span className="text-accent-600 font-semibold">A</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">Ana Martínez</p>
+                    <p className="text-sm text-gray-500">Generación C1</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Final */}
+      <section className="py-20 bg-gradient-to-r from-blue-600 to-green-600">
+        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
+            ¿Listo para vivir la experiencia?
+          </h2>
+          <p className="text-xl text-blue-100 mb-8">
+            Únete a nuestra comunidad y comienza tu transformación personal hoy mismo
+          </p>
+          <Button size="lg" className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white text-lg px-8 py-4 shadow-lg hover:shadow-xl transition-all duration-300">
+            Quiero vivir la experiencia
+            <ArrowRight className="ml-2 h-6 w-6" />
+          </Button>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-4 gap-8">
+            <div className="col-span-2">
+              <div className="flex items-center space-x-2 mb-4">
+                <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-lg"></div>
+                <span className="text-xl font-bold">Creando Consciencia Tecate</span>
+              </div>
+              <p className="text-gray-400 mb-4">
+                Transformando vidas a través del liderazgo consciente y el crecimiento personal.
+              </p>
+              <div className="flex space-x-4">
+                <a href="#" className="text-gray-400 hover:text-white transition-colors flex items-center space-x-2">
+                  <Facebook className="h-5 w-5" />
+                  <span>Facebook</span>
+                </a>
+                <a href="#" className="text-gray-400 hover:text-white transition-colors flex items-center space-x-2">
+                  <Instagram className="h-5 w-5" />
+                  <span>Instagram</span>
+                </a>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Contacto</h3>
+              <div className="space-y-2 text-gray-400">
+                <p>info@cctecate.com</p>
+                <p>+52 664 123 4567</p>
+                <p>Tecate, Baja California</p>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Enlaces</h3>
+              <div className="space-y-2">
+                <Link href="/portal" className="block text-gray-400 hover:text-white transition-colors">
+                  Portal de Usuarios
+                </Link>
+                <a href="#" className="block text-gray-400 hover:text-white transition-colors">
+                  Política de Privacidad
+                </a>
+                <a href="#" className="block text-gray-400 hover:text-white transition-colors">
+                  Términos de Servicio
+                </a>
+              </div>
+            </div>
+          </div>
+          
+          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
+            <p>&copy; 2024 Creando Consciencia Tecate. Todos los derechos reservados.</p>
+          </div>
+        </div>
       </footer>
     </div>
-  );
+  )
 }
