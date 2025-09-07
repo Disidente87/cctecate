@@ -1,24 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  --background: 0 0% 98%;
-  --foreground: 0 0% 15%;
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 15%;
+  --card-foreground: 0 0% 0%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 15%;
+  --popover-foreground: 0 0% 0%;
   --primary: 214 95% 50%;
   --primary-foreground: 0 0% 98%;
   --secondary: 142 76% 36%;
   --secondary-foreground: 0 0% 98%;
-  --muted: 0 0% 95%;
-  --muted-foreground: 0 0% 45%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 0%;
   --accent: 0 0% 96%;
-  --accent-foreground: 0 0% 15%;
+  --accent-foreground: 0 0% 0%;
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
   --border: 0 0% 90%;
-  --input: 0 0% 90%;
+  --input: 0 0% 100%;
   --ring: 214 95% 50%;
   --radius: 0.5rem;
 }
@@ -26,19 +26,19 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --background: 0 0% 8%;
-    --foreground: 0 0% 95%;
+    --foreground: 0 0% 0%;
     --card: 0 0% 10%;
-    --card-foreground: 0 0% 95%;
+    --card-foreground: 0 0% 0%;
     --popover: 0 0% 10%;
-    --popover-foreground: 0 0% 95%;
+    --popover-foreground: 0 0% 0%;
     --primary: 214 95% 50%;
     --primary-foreground: 0 0% 98%;
     --secondary: 142 76% 36%;
     --secondary-foreground: 0 0% 98%;
     --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 65%;
+    --muted-foreground: 0 0% 0%;
     --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 95%;
+    --accent-foreground: 0 0% 0%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 15%;
@@ -55,6 +55,24 @@ body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* Forzar todos los textos a ser negros por defecto */
+* {
+  color: black !important;
+}
+
+/* Excepciones para elementos que necesitan colores específicos */
+.bg-blue-600, .bg-blue-700, .bg-primary-600, .bg-primary-700 {
+  color: white !important;
+}
+
+.text-white {
+  color: white !important;
+}
+
+.text-primary-800, .text-primary-700 {
+  color: black !important;
 }
 
 h1, h2, h3, h4, h5, h6 {

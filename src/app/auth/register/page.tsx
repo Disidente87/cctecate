@@ -106,23 +106,23 @@ export default function RegisterPage() {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center space-x-2 mb-4">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-green-500 rounded-lg"></div>
-            <span className="text-2xl font-bold text-gray-800">CC Tecate</span>
+            <span className="text-2xl font-bold ">CC Tecate</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Únete a nuestra comunidad</h1>
-          <p className="text-gray-700">Crea tu cuenta y comienza tu transformación</p>
+          <h1 className="text-3xl font-bold  mb-2">Únete a nuestra comunidad</h1>
+          <p className="">Crea tu cuenta y comienza tu transformación</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-gray-800">Crear Cuenta</CardTitle>
-            <CardDescription className="text-gray-700">
+            <CardTitle className="">Crear Cuenta</CardTitle>
+            <CardDescription className="">
               Completa el formulario para registrarte
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-800 mb-2">
+                <label htmlFor="name" className="block text-sm font-medium  mb-2">
                   Nombre completo
                 </label>
                 <input
@@ -131,14 +131,14 @@ export default function RegisterPage() {
                   type="text"
                   value={formData.name}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500  bg-white"
                   placeholder="Tu nombre completo"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-800 mb-2">
+                <label htmlFor="email" className="block text-sm font-medium  mb-2">
                   Correo electrónico
                 </label>
                 <input
@@ -147,14 +147,14 @@ export default function RegisterPage() {
                   type="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500  bg-white"
                   placeholder="tu@email.com"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="role" className="block text-sm font-medium text-gray-800 mb-2">
+                <label htmlFor="role" className="block text-sm font-medium  mb-2">
                   Rol
                 </label>
                 <select
@@ -162,46 +162,46 @@ export default function RegisterPage() {
                   name="role"
                   value={formData.role}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500  bg-white"
                   required
                 >
-                  <option value="lider" className="text-gray-800">Líder</option>
-                  <option value="senior" className="text-gray-800">Senior</option>
-                  <option value="admin" className="text-gray-800">Admin</option>
+                  <option value="lider" className="">Líder</option>
+                  <option value="senior" className="">Senior</option>
+                  <option value="admin" className="">Admin</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-2">
+                <label className="block text-sm font-medium  mb-2">
                   Generación
                 </label>
                 {isLoadingGeneration ? (
                   <div className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 flex items-center">
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    <span className="text-gray-600">Cargando generación...</span>
+                    <span className="">Cargando generación...</span>
                   </div>
                 ) : activeGeneration ? (
                   <div className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-green-50 border-green-200">
                     <div className="flex items-center">
                       <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                      <span className="text-green-800 font-medium">{activeGeneration.name}</span>
+                      <span className=" font-medium">{activeGeneration.name}</span>
                     </div>
-                    <p className="text-sm text-green-600 mt-1">
+                    <p className="text-sm  mt-1">
                       Registro abierto hasta: {new Date(activeGeneration.registration_end_date).toLocaleDateString('es-ES')}
                     </p>
                   </div>
                 ) : (
                   <div className="w-full px-3 py-2 border border-red-300 rounded-md shadow-sm bg-red-50">
                     <div className="flex items-center">
-                      <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
-                      <span className="text-red-800">No hay generación activa</span>
+                      <AlertCircle className="h-4 w-4  mr-2" />
+                      <span className="">No hay generación activa</span>
                     </div>
                   </div>
                 )}
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-800 mb-2">
+                <label htmlFor="password" className="block text-sm font-medium  mb-2">
                   Contraseña
                 </label>
                 <div className="relative">
@@ -211,7 +211,7 @@ export default function RegisterPage() {
                     type={showPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500  bg-white"
                     placeholder="Mínimo 6 caracteres"
                     required
                   />
@@ -230,7 +230,7 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-800 mb-2">
+                <label htmlFor="confirmPassword" className="block text-sm font-medium  mb-2">
                   Confirmar contraseña
                 </label>
                 <div className="relative">
@@ -240,7 +240,7 @@ export default function RegisterPage() {
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500  bg-white"
                     placeholder="Confirma tu contraseña"
                     required
                   />
@@ -260,7 +260,7 @@ export default function RegisterPage() {
 
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                  <p className="text-sm text-red-600">{error}</p>
+                  <p className="text-sm ">{error}</p>
                 </div>
               )}
 
@@ -281,9 +281,9 @@ export default function RegisterPage() {
             </form>
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-700">
+              <p className="text-sm ">
                 ¿Ya tienes cuenta?{' '}
-                <Link href="/auth/login" className="text-blue-600 hover:text-blue-500 font-medium">
+                <Link href="/auth/login" className=" hover: font-medium">
                   Inicia sesión aquí
                 </Link>
               </p>
@@ -292,7 +292,7 @@ export default function RegisterPage() {
         </Card>
 
         <div className="mt-6 text-center">
-          <Link href="/" className="text-sm text-gray-700 hover:text-gray-900">
+          <Link href="/" className="text-sm  hover:">
             ← Volver al inicio
           </Link>
         </div>

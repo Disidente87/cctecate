@@ -13,7 +13,7 @@ export default function HomePage() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-lg"></div>
-              <span className="text-xl font-bold text-gray-900">CC Tecate</span>
+              <span className="text-xl font-bold ">CC Tecate</span>
             </div>
             <Link href="/portal">
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -30,20 +30,20 @@ export default function HomePage() {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-8">
               <div className="space-y-4">
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold  leading-tight">
                   Transforma tu vida,{" "}
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-green-600">
                     despierta tu liderazgo
                   </span>
                 </h1>
-                <p className="text-xl text-gray-600 leading-relaxed">
+                <p className="text-xl  leading-relaxed">
                   Únete a nuestra comunidad y descubre el poder de la inteligencia emocional, 
                   las metas personales y el crecimiento en comunidad.
                 </p>
               </div>
               
               <div className="flex flex-col sm:flex-row gap-4">
-                <Button size="lg" className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-black">
+                <Button size="lg" className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white">
                   Inscríbete ahora
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
@@ -73,10 +73,10 @@ export default function HomePage() {
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold  mb-4">
               Nuestro Proceso de Transformación
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            <p className="text-xl  max-w-3xl mx-auto">
               Un viaje estructurado de crecimiento personal diseñado para despertar tu máximo potencial
             </p>
           </div>
@@ -85,15 +85,15 @@ export default function HomePage() {
             <Card className="text-center border-2 border-primary-100 hover:border-primary-300 transition-colors">
               <CardHeader>
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Calendar className="h-8 w-8 text-blue-600" />
+                  <Calendar className="h-8 w-8 " />
                 </div>
-                <CardTitle className="text-2xl text-gray-800">Nivel Básico</CardTitle>
-                <CardDescription className="text-lg text-gray-700">
+                <CardTitle className="text-2xl ">Nivel Básico</CardTitle>
+                <CardDescription className="text-lg ">
                   Fin de semana intensivo de autoconocimiento
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600">
+                <p className="">
                   Descubre tus fortalezas, identifica áreas de mejora y establece las bases 
                   para tu transformación personal.
                 </p>
@@ -103,15 +103,15 @@ export default function HomePage() {
             <Card className="text-center border-2 border-green-100 hover:border-green-300 transition-colors">
               <CardHeader>
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Target className="h-8 w-8 text-green-600" />
+                  <Target className="h-8 w-8 " />
                 </div>
-                <CardTitle className="text-2xl text-gray-800">Nivel Avanzado</CardTitle>
-                <CardDescription className="text-lg text-gray-700">
+                <CardTitle className="text-2xl ">Nivel Avanzado</CardTitle>
+                <CardDescription className="text-lg ">
                   2 semanas después del básico
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600">
+                <p className="">
                   Profundiza en tus metas personales, desarrolla mecanismos de acción 
                   y comienza a construir tu plan de vida.
                 </p>
@@ -121,15 +121,15 @@ export default function HomePage() {
             <Card className="text-center border-2 border-yellow-100 hover:border-yellow-300 transition-colors">
               <CardHeader>
                 <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Star className="h-8 w-8 text-yellow-600" />
+                  <Star className="h-8 w-8 " />
                 </div>
-                <CardTitle className="text-2xl text-gray-800">Programa de Liderazgo</CardTitle>
-                <CardDescription className="text-lg text-gray-700">
+                <CardTitle className="text-2xl ">Programa de Liderazgo</CardTitle>
+                <CardDescription className="text-lg ">
                   PL1, PL2, PL3 - Evolución continua
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600">
+                <p className="">
                   Conviértete en líder de tu propia vida y de tu comunidad. 
                   Programa de seguimiento y crecimiento continuo.
                 </p>
@@ -144,47 +144,47 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
-              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-6">
+              <h2 className="text-3xl sm:text-4xl font-bold  mb-6">
                 Beneficios que Transformarán tu Vida
               </h2>
               <div className="space-y-6">
                 <div className="flex items-start space-x-4">
                   <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                    <Heart className="h-5 w-5 text-pink-600" />
+                    <Heart className="h-5 w-5 " />
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-2">Inteligencia Emocional</h3>
-                    <p className="text-gray-600">Desarrolla la capacidad de reconocer, entender y gestionar tus emociones de manera efectiva.</p>
+                    <h3 className="text-xl font-semibold  mb-2">Inteligencia Emocional</h3>
+                    <p className="">Desarrolla la capacidad de reconocer, entender y gestionar tus emociones de manera efectiva.</p>
                   </div>
                 </div>
 
                 <div className="flex items-start space-x-4">
                   <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                    <Target className="h-5 w-5 text-green-600" />
+                    <Target className="h-5 w-5 " />
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-2">Metas Personales</h3>
-                    <p className="text-gray-600">Aprende a establecer y alcanzar objetivos claros en todas las áreas de tu vida.</p>
+                    <h3 className="text-xl font-semibold  mb-2">Metas Personales</h3>
+                    <p className="">Aprende a establecer y alcanzar objetivos claros en todas las áreas de tu vida.</p>
                   </div>
                 </div>
 
                 <div className="flex items-start space-x-4">
                   <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                    <DollarSign className="h-5 w-5 text-yellow-600" />
+                    <DollarSign className="h-5 w-5 " />
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-2">Bienestar Financiero</h3>
-                    <p className="text-gray-600">Desarrolla una relación saludable con el dinero y construye tu libertad financiera.</p>
+                    <h3 className="text-xl font-semibold  mb-2">Bienestar Financiero</h3>
+                    <p className="">Desarrolla una relación saludable con el dinero y construye tu libertad financiera.</p>
                   </div>
                 </div>
 
                 <div className="flex items-start space-x-4">
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                    <Users className="h-5 w-5 text-blue-600" />
+                    <Users className="h-5 w-5 " />
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-2">Comunidad de Apoyo</h3>
-                    <p className="text-gray-600">Conecta con personas que comparten tus valores y objetivos de crecimiento.</p>
+                    <h3 className="text-xl font-semibold  mb-2">Comunidad de Apoyo</h3>
+                    <p className="">Conecta con personas que comparten tus valores y objetivos de crecimiento.</p>
                   </div>
                 </div>
               </div>
@@ -209,10 +209,10 @@ export default function HomePage() {
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold  mb-4">
               Lo que dicen nuestros participantes
             </h2>
-            <p className="text-xl text-gray-600">
+            <p className="text-xl ">
               Historias reales de transformación y crecimiento
             </p>
           </div>
@@ -222,10 +222,10 @@ export default function HomePage() {
               <CardContent className="pt-6">
                 <div className="flex items-center mb-4">
                   {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                    <Star key={i} className="h-5 w-5  fill-current" />
                   ))}
                 </div>
-                <p className="text-gray-600 mb-4">
+                <p className=" mb-4">
                   &ldquo;CC Tecate cambió completamente mi perspectiva sobre el liderazgo. 
                   Ahora tengo claridad en mis metas y la confianza para alcanzarlas.&rdquo;
                 </p>
@@ -234,8 +234,8 @@ export default function HomePage() {
                     <span className="text-primary-600 font-semibold">M</span>
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900">María González</p>
-                    <p className="text-sm text-gray-500">Generación C1</p>
+                    <p className="font-semibold ">María González</p>
+                    <p className="text-sm ">Generación C1</p>
                   </div>
                 </div>
               </CardContent>
@@ -245,10 +245,10 @@ export default function HomePage() {
               <CardContent className="pt-6">
                 <div className="flex items-center mb-4">
                   {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                    <Star key={i} className="h-5 w-5  fill-current" />
                   ))}
                 </div>
-                <p className="text-gray-600 mb-4">
+                <p className=" mb-4">
                   &ldquo;La comunidad que encontré aquí es invaluable. El apoyo mutuo y 
                   la motivación constante me han ayudado a crecer como persona y profesional.&rdquo;
                 </p>
@@ -257,8 +257,8 @@ export default function HomePage() {
                     <span className="text-secondary-600 font-semibold">C</span>
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900">Carlos Rodríguez</p>
-                    <p className="text-sm text-gray-500">Generación C2</p>
+                    <p className="font-semibold ">Carlos Rodríguez</p>
+                    <p className="text-sm ">Generación C2</p>
                   </div>
                 </div>
               </CardContent>
@@ -268,10 +268,10 @@ export default function HomePage() {
               <CardContent className="pt-6">
                 <div className="flex items-center mb-4">
                   {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                    <Star key={i} className="h-5 w-5  fill-current" />
                   ))}
                 </div>
-                <p className="text-gray-600 mb-4">
+                <p className=" mb-4">
                   &ldquo;El programa me enseñó que el liderazgo comienza con uno mismo. 
                   Ahora soy más consciente de mis emociones y cómo impactan a los demás.&rdquo;
                 </p>
@@ -280,8 +280,8 @@ export default function HomePage() {
                     <span className="text-accent-600 font-semibold">A</span>
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900">Ana Martínez</p>
-                    <p className="text-sm text-gray-500">Generación C1</p>
+                    <p className="font-semibold ">Ana Martínez</p>
+                    <p className="text-sm ">Generación C1</p>
                   </div>
                 </div>
               </CardContent>
@@ -296,7 +296,7 @@ export default function HomePage() {
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
             ¿Listo para vivir la experiencia?
           </h2>
-          <p className="text-xl text-blue-100 mb-8">
+          <p className="text-xl  mb-8">
             Únete a nuestra comunidad y comienza tu transformación personal hoy mismo
           </p>
           <Button size="lg" className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white text-lg px-8 py-4 shadow-lg hover:shadow-xl transition-all duration-300">

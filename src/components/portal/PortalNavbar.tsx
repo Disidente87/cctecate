@@ -61,7 +61,7 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
             <div className="flex-shrink-0 flex items-center">
               <Link href="/portal" className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-lg"></div>
-                <span className="text-xl font-bold text-gray-900">CC Portal</span>
+                <span className="text-xl font-bold ">CC Portal</span>
               </Link>
             </div>
             
@@ -71,7 +71,7 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className="text-gray-500 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  className=" hover: px-3 py-2 rounded-md text-sm font-medium transition-colors"
                 >
                   {item.name}
                 </Link>
@@ -91,8 +91,8 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end">
                 <div className="px-3 py-2">
-                  <p className="text-sm font-medium text-gray-900">{user?.user_metadata?.name || user?.email}</p>
-                  <p className="text-xs text-gray-500">{user?.user_metadata?.role || 'Usuario'}</p>
+                  <p className="text-sm font-medium ">{user?.user_metadata?.name || user?.email}</p>
+                  <p className="text-xs ">{user?.user_metadata?.role || 'Usuario'}</p>
                 </div>
                 <DropdownMenuItem>
                   <Settings className="mr-2 h-4 w-4" />
@@ -130,7 +130,7 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className="text-gray-500 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium"
+                  className=" hover: block px-3 py-2 rounded-md text-base font-medium"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   {item.name}

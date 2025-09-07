@@ -9,6 +9,8 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function LoginPage() {
+  console.log('📱 LoginPage componente montado')
+  
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -17,22 +19,34 @@ export default function LoginPage() {
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
+    console.log('🚀 handleLogin ejecutándose...')
     e.preventDefault()
     setLoading(true)
     setError('')
 
+    console.log('🔐 Intentando iniciar sesión con:', { email })
+
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
+      console.log('📊 Resultado del login:', { data, error })
+
       if (error) {
+        console.error('❌ Error en login:', error)
         setError(error.message)
       } else {
-        router.push('/portal')
+        console.log('✅ Login exitoso, redirigiendo a /portal...')
+        console.log('🔍 Datos del usuario:', data.user)
+        console.log('🔍 Sesión:', data.session)
+        
+        // Redirección directa al portal
+        window.location.href = '/portal'
       }
-    } catch {
+    } catch (err) {
+      console.error('💥 Error inesperado:', err)
       setError('Error inesperado. Intenta de nuevo.')
     } finally {
       setLoading(false)
@@ -45,23 +59,23 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center space-x-2 mb-4">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-green-500 rounded-lg"></div>
-            <span className="text-2xl font-bold text-gray-800">CC Tecate</span>
+            <span className="text-2xl font-bold ">CC Tecate</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Bienvenido de vuelta</h1>
-          <p className="text-gray-700">Inicia sesión en tu portal personal</p>
+          <h1 className="text-3xl font-bold  mb-2">Bienvenido de vuelta</h1>
+          <p className="">Inicia sesión en tu portal personal</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-gray-800">Iniciar Sesión</CardTitle>
-            <CardDescription className="text-gray-700">
+            <CardTitle className="">Iniciar Sesión</CardTitle>
+            <CardDescription className="">
               Ingresa tus credenciales para acceder al portal
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-800 mb-2">
+                <label htmlFor="email" className="block text-sm font-medium  mb-2">
                   Correo electrónico
                 </label>
                 <input
@@ -69,14 +83,14 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500  bg-white"
                   placeholder="tu@email.com"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-800 mb-2">
+                <label htmlFor="password" className="block text-sm font-medium  mb-2">
                   Contraseña
                 </label>
                 <div className="relative">
@@ -85,7 +99,7 @@ export default function LoginPage() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500  bg-white"
                     placeholder="Tu contraseña"
                     required
                   />
@@ -105,7 +119,7 @@ export default function LoginPage() {
 
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                  <p className="text-sm text-red-600">{error}</p>
+                  <p className="text-sm ">{error}</p>
                 </div>
               )}
 
@@ -126,9 +140,9 @@ export default function LoginPage() {
             </form>
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-700">
+              <p className="text-sm ">
                 ¿No tienes cuenta?{' '}
-                <Link href="/auth/register" className="text-blue-600 hover:text-blue-500 font-medium">
+                <Link href="/auth/register" className=" hover: font-medium">
                   Regístrate aquí
                 </Link>
               </p>
@@ -137,7 +151,7 @@ export default function LoginPage() {
         </Card>
 
         <div className="mt-6 text-center">
-          <Link href="/" className="text-sm text-gray-700 hover:text-gray-900">
+          <Link href="/" className="text-sm  hover:">
             ← Volver al inicio
           </Link>
         </div>

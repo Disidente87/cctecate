@@ -85,10 +85,10 @@ export default function ActividadesPage() {
 
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'Bienestar': return 'bg-pink-100 text-pink-800'
-      case 'Salud': return 'bg-green-100 text-green-800'
-      case 'Relaciones': return 'bg-blue-100 text-blue-800'
-      case 'Crecimiento': return 'bg-purple-100 text-purple-800'
+      case 'Bienestar': return 'bg-pink-100 '
+      case 'Salud': return 'bg-green-100 '
+      case 'Relaciones': return 'bg-blue-100 '
+      case 'Crecimiento': return 'bg-purple-100 '
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -107,8 +107,8 @@ export default function ActividadesPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Actividades Gustosas</h1>
-        <p className="text-gray-600 mt-2">
+        <h1 className="text-3xl font-bold ">Actividades Gustosas</h1>
+        <p className=" mt-2">
           Descubre nuevas actividades semanales para enriquecer tu crecimiento personal
         </p>
       </div>
@@ -117,12 +117,12 @@ export default function ActividadesPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Progreso Semanal</CardTitle>
-            <Star className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium ">Progreso Semanal</CardTitle>
+            <Star className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{completionRate}%</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs ">
               {completedCount} de {totalUnlocked} completadas
             </p>
           </CardContent>
@@ -130,17 +130,17 @@ export default function ActividadesPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Puntos Obtenidos</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium ">Puntos Obtenidos</CardTitle>
+            <CheckCircle className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold ">
               {activities
                 .filter(activity => completedActivities.includes(activity.id))
                 .reduce((total, activity) => total + activity.points, 0)
               }
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs ">
               Esta semana
             </p>
           </CardContent>
@@ -148,14 +148,14 @@ export default function ActividadesPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Próxima Actividad</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium ">Próxima Actividad</CardTitle>
+            <Calendar className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold ">
               {activities.filter(activity => !activity.isUnlocked).length}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs ">
               Por desbloquear
             </p>
           </CardContent>
@@ -164,7 +164,7 @@ export default function ActividadesPage() {
 
       {/* Current Week Activities */}
       <div className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">
+        <h2 className="text-xl font-semibold  mb-6">
           Actividades de Esta Semana
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -186,7 +186,7 @@ export default function ActividadesPage() {
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium text-gray-600">
+                    <span className="text-sm font-medium ">
                       {activity.points} pts
                     </span>
                     <button
@@ -211,7 +211,7 @@ export default function ActividadesPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between text-sm text-gray-500">
+                <div className="flex items-center justify-between text-sm ">
                   <span>
                     {activity.completedBy.length} personas completaron
                   </span>
@@ -227,7 +227,7 @@ export default function ActividadesPage() {
 
       {/* Upcoming Activities */}
       <div className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">
+        <h2 className="text-xl font-semibold  mb-6">
           Próximas Actividades
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -243,11 +243,11 @@ export default function ActividadesPage() {
                         {activity.category}
                       </span>
                     </div>
-                    <span className="text-sm font-medium text-gray-600">
+                    <span className="text-sm font-medium ">
                       {activity.points} pts
                     </span>
                   </div>
-                  <CardTitle className="text-lg text-gray-500">
+                  <CardTitle className="text-lg ">
                     {activity.title}
                   </CardTitle>
                   <CardDescription className="text-gray-400">
@@ -272,12 +272,12 @@ export default function ActividadesPage() {
         <Card className="bg-gradient-to-r from-green-50 to-primary-50 border-green-200">
           <CardContent className="text-center py-8">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="h-8 w-8 text-green-600" />
+              <CheckCircle className="h-8 w-8 " />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            <h3 className="text-xl font-semibold  mb-2">
               ¡Excelente trabajo!
             </h3>
-            <p className="text-gray-600 mb-4">
+            <p className=" mb-4">
               Has completado todas las actividades de esta semana. 
               ¡Sigue así y mantén tu momentum!
             </p>
@@ -296,10 +296,10 @@ export default function ActividadesPage() {
         <Card className="text-center py-12">
           <CardContent>
             <Star className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <h3 className="text-lg font-medium  mb-2">
               No hay actividades disponibles
             </h3>
-            <p className="text-gray-500 mb-4">
+            <p className=" mb-4">
               Las actividades se desbloquean semanalmente. 
               Vuelve pronto para descubrir nuevas experiencias.
             </p>

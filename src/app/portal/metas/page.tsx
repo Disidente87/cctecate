@@ -13,12 +13,17 @@ import {
   TrendingUp
 } from 'lucide-react'
 
+interface Mechanism {
+  id: string
+  description: string
+  frequency: 'daily' | '2x_week' | '3x_week' | '4x_week' | '5x_week' | 'weekly' | 'monthly' | 'yearly'
+}
+
 interface Goal {
   id: string
   category: string
   description: string
-  mechanisms: string[]
-  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'
+  mechanisms: Mechanism[]
   isCustom: boolean
   completed: boolean
 }
@@ -36,7 +41,11 @@ const goalCategories = [
 
 const frequencyLabels = {
   daily: 'Diario',
-  weekly: 'Semanal', 
+  '2x_week': '2 veces por semana',
+  '3x_week': '3 veces por semana',
+  '4x_week': '4 veces por semana',
+  '5x_week': '5 veces por semana',
+  weekly: '1 vez por semana',
   monthly: 'Mensual',
   yearly: 'Anual'
 }
@@ -78,8 +87,10 @@ export default function MetasPage() {
       id: '1',
       category: 'Personal',
       description: 'Desarrollar hábito de lectura diaria',
-      mechanisms: ['Leer 30 min antes de dormir', 'Llevar libro siempre'],
-      frequency: 'daily',
+      mechanisms: [
+        { id: '1-1', description: 'Leer 30 min antes de dormir', frequency: 'daily' },
+        { id: '1-2', description: 'Llevar libro siempre', frequency: 'daily' }
+      ],
       isCustom: false,
       completed: false
     },
@@ -87,8 +98,10 @@ export default function MetasPage() {
       id: '2', 
       category: 'Salud',
       description: 'Mantener rutina de ejercicio consistente',
-      mechanisms: ['Gimnasio 3x por semana', 'Caminar 30 min diarios'],
-      frequency: 'weekly',
+      mechanisms: [
+        { id: '2-1', description: 'Gimnasio 3x por semana', frequency: '3x_week' },
+        { id: '2-2', description: 'Caminar 30 min diarios', frequency: 'daily' }
+      ],
       isCustom: false,
       completed: true
     }
@@ -98,15 +111,14 @@ export default function MetasPage() {
   const [newGoal, setNewGoal] = useState({
     category: '',
     description: '',
-    mechanisms: [] as string[],
-    frequency: 'daily' as 'daily' | 'weekly' | 'monthly' | 'yearly',
+    mechanisms: [] as Mechanism[],
     isCustom: false
   })
 
   const [editingGoal, setEditingGoal] = useState<string | null>(null)
 
   const handleAddGoal = () => {
-    if (!newGoal.category || !newGoal.description) return
+    if (!newGoal.category || !newGoal.description || newGoal.mechanisms.length < 4) return
 
     const goal: Goal = {
       id: Date.now().toString(),
@@ -119,7 +131,6 @@ export default function MetasPage() {
       category: '',
       description: '',
       mechanisms: [],
-      frequency: 'daily',
       isCustom: false
     })
     setShowAddGoal(false)
@@ -135,18 +146,32 @@ export default function MetasPage() {
     setGoals(goals.filter(goal => goal.id !== goalId))
   }
 
-  // const handleAddMechanism = (goalId: string, mechanism: string) => {
-  //   setGoals(goals.map(goal => 
-  //     goal.id === goalId 
-  //       ? { ...goal, mechanisms: [...goal.mechanisms, mechanism] }
-  //       : goal
-  //   ))
-  // }
+  const handleAddMechanism = (description: string, frequency: string) => {
+    if (!description.trim()) return
 
-  const handleRemoveMechanism = (goalId: string, mechanismIndex: number) => {
+    const newMechanism: Mechanism = {
+      id: Date.now().toString(),
+      description: description.trim(),
+      frequency: frequency as any
+    }
+
+    setNewGoal({
+      ...newGoal,
+      mechanisms: [...newGoal.mechanisms, newMechanism]
+    })
+  }
+
+  const handleRemoveMechanism = (mechanismId: string) => {
+    setNewGoal({
+      ...newGoal,
+      mechanisms: newGoal.mechanisms.filter(m => m.id !== mechanismId)
+    })
+  }
+
+  const handleRemoveMechanismFromGoal = (goalId: string, mechanismId: string) => {
     setGoals(goals.map(goal => 
       goal.id === goalId 
-        ? { ...goal, mechanisms: goal.mechanisms.filter((_, index) => index !== mechanismIndex) }
+        ? { ...goal, mechanisms: goal.mechanisms.filter(m => m.id !== mechanismId) }
         : goal
     ))
   }
@@ -159,8 +184,8 @@ export default function MetasPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Mis Metas</h1>
-        <p className="text-gray-600 mt-2">
+        <h1 className="text-3xl font-bold ">Mis Metas</h1>
+        <p className=" mt-2">
           Establece y gestiona tus objetivos personales para alcanzar tus sueños
         </p>
       </div>
@@ -170,11 +195,11 @@ export default function MetasPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Progreso General</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <TrendingUp className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{completionRate}%</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold ">{completionRate}%</div>
+            <p className="text-xs ">
               {completedGoals} de {totalGoals} metas completadas
             </p>
           </CardContent>
@@ -183,11 +208,11 @@ export default function MetasPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Metas Activas</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
+            <Target className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalGoals - completedGoals}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold ">{totalGoals - completedGoals}</div>
+            <p className="text-xs ">
               En progreso
             </p>
           </CardContent>
@@ -196,11 +221,11 @@ export default function MetasPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completadas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CheckCircle className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{completedGoals}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold ">{completedGoals}</div>
+            <p className="text-xs ">
               Logros alcanzados
             </p>
           </CardContent>
@@ -209,8 +234,8 @@ export default function MetasPage() {
 
       {/* Add Goal Button */}
       <div className="mb-6">
-        <Button onClick={() => setShowAddGoal(true)} className="bg-primary-600 hover:bg-primary-700">
-          <Plus className="mr-2 h-4 w-4" />
+        <Button onClick={() => setShowAddGoal(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Plus className="mr-2 h-4 w-4 text-white"/>
           Nueva Meta
         </Button>
       </div>
@@ -219,15 +244,15 @@ export default function MetasPage() {
       {showAddGoal && (
         <Card className="mb-6 border-primary-200">
           <CardHeader>
-            <CardTitle>Agregar Nueva Meta</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-sm font-medium">Agregar Nueva Meta</CardTitle>
+            <CardDescription className="">
               Establece un objetivo claro y específico para tu crecimiento personal
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium mb-2">
                   Categoría
                 </label>
                 <select
@@ -235,33 +260,18 @@ export default function MetasPage() {
                   onChange={(e) => setNewGoal({...newGoal, category: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">Selecciona una categoría</option>
+                  <option value="" className="text-sm font-medium">Selecciona una categoría</option>
                   {goalCategories.map(category => (
-                    <option key={category} value={category}>{category}</option>
+                    <option key={category} value={category} className="text-sm font-medium">{category}</option>
                   ))}
                   <option value="custom">Otra (personalizada)</option>
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Frecuencia
-                </label>
-                <select
-                  value={newGoal.frequency}
-                  onChange={(e) => setNewGoal({...newGoal, frequency: e.target.value as 'daily' | 'weekly' | 'monthly' | 'yearly'})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="daily">Diario</option>
-                  <option value="weekly">Semanal</option>
-                  <option value="monthly">Mensual</option>
-                  <option value="yearly">Anual</option>
-                </select>
-              </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium  mb-2">
                 Descripción de la Meta
               </label>
               <textarea
@@ -274,70 +284,81 @@ export default function MetasPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium mb-2">
                 Mecanismos de Acción
               </label>
-              <p className="text-sm text-gray-500 mb-2">
-                Selecciona al menos 4 mecanismos que te ayuden a alcanzar esta meta:
+              <p className="text-sm mb-2">
+                Agrega al menos 4 mecanismos con su frecuencia específica:
               </p>
               
-              {newGoal.category && suggestedMechanisms[newGoal.category as keyof typeof suggestedMechanisms] && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
-                  {suggestedMechanisms[newGoal.category as keyof typeof suggestedMechanisms].map((mechanism, index) => (
-                    <label key={index} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={newGoal.mechanisms.includes(mechanism)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setNewGoal({...newGoal, mechanisms: [...newGoal.mechanisms, mechanism]})
-                          } else {
-                            setNewGoal({...newGoal, mechanisms: newGoal.mechanisms.filter(m => m !== mechanism)})
-                          }
-                        }}
-                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                      />
-                      <span className="text-sm text-gray-700">{mechanism}</span>
-                    </label>
-                  ))}
+              {/* Mecanismos agregados */}
+              {newGoal.mechanisms.map((mechanism) => (
+                <div key={mechanism.id} className="flex items-center space-x-2 mb-2 p-2 bg-gray-50 rounded">
+                  <span className="flex-1 text-sm">{mechanism.description}</span>
+                  <span className="text-xs text-gray-500">
+                    ({frequencyLabels[mechanism.frequency]})
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRemoveMechanism(mechanism.id)}
+                    className="text-red-600 hover:text-red-700 p-1"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
                 </div>
-              )}
+              ))}
 
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  placeholder="Agregar mecanismo personalizado"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                      setNewGoal({...newGoal, mechanisms: [...newGoal.mechanisms, e.currentTarget.value.trim()]})
-                      e.currentTarget.value = ''
-                    }
-                  }}
-                />
+              {/* Formulario para agregar nuevo mecanismo */}
+              <div className="space-y-2 border-t pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Descripción del mecanismo"
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    id="mechanism-description"
+                  />
+                  <select
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    id="mechanism-frequency"
+                  >
+                    <option value="daily">Diario</option>
+                    <option value="2x_week">2 veces por semana</option>
+                    <option value="3x_week">3 veces por semana</option>
+                    <option value="4x_week">4 veces por semana</option>
+                    <option value="5x_week">5 veces por semana</option>
+                    <option value="weekly">1 vez por semana</option>
+                    <option value="monthly">Mensual</option>
+                    <option value="yearly">Anual</option>
+                  </select>
+                </div>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {
-                    const input = document.querySelector('input[placeholder="Agregar mecanismo personalizado"]') as HTMLInputElement
-                    if (input && input.value.trim()) {
-                      setNewGoal({...newGoal, mechanisms: [...newGoal.mechanisms, input.value.trim()]})
-                      input.value = ''
+                    const descriptionInput = document.getElementById('mechanism-description') as HTMLInputElement
+                    const frequencySelect = document.getElementById('mechanism-frequency') as HTMLSelectElement
+                    if (descriptionInput && frequencySelect && descriptionInput.value.trim()) {
+                      handleAddMechanism(descriptionInput.value, frequencySelect.value)
+                      descriptionInput.value = ''
                     }
                   }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
                 >
-                  Agregar
+                  Agregar Mecanismo
                 </Button>
               </div>
             </div>
 
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowAddGoal(false)}>
+              <Button variant="outline" onClick={() => setShowAddGoal(false)} className="bg-blue-600 hover:bg-blue-700 text-white">
                 Cancelar
               </Button>
               <Button 
                 onClick={handleAddGoal}
                 disabled={!newGoal.category || !newGoal.description || newGoal.mechanisms.length < 4}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Crear Meta
               </Button>
@@ -364,16 +385,12 @@ export default function MetasPage() {
                     {goal.completed && <CheckCircle className="h-4 w-4" />}
                   </button>
                   <div>
-                    <CardTitle className={`text-lg ${goal.completed ? 'line-through text-gray-500' : ''}`}>
+                    <CardTitle className={`text-lg ${goal.completed ? 'line-through ' : ''}`}>
                       {goal.description}
                     </CardTitle>
                     <div className="flex items-center space-x-4 mt-2">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
                         {goal.category}
-                      </span>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        <Calendar className="w-3 h-3 mr-1" />
-                        {frequencyLabels[goal.frequency]}
                       </span>
                     </div>
                   </div>
@@ -390,7 +407,7 @@ export default function MetasPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDeleteGoal(goal.id)}
-                    className="text-red-600 hover:text-red-700"
+                    className=" hover:"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -399,21 +416,26 @@ export default function MetasPage() {
             </CardHeader>
             <CardContent>
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Mecanismos de Acción:</h4>
+                <h4 className="text-sm font-medium  mb-2">Mecanismos de Acción:</h4>
                 <div className="space-y-2">
                   {goal.mechanisms.map((mechanism, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <div className={`w-2 h-2 rounded-full ${
-                        goal.completed ? 'bg-green-500' : 'bg-primary-500'
-                      }`}></div>
-                      <span className={`text-sm ${goal.completed ? 'text-gray-500' : 'text-gray-700'}`}>
-                        {mechanism}
-                      </span>
+                    <div key={mechanism.id || index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <div className="flex items-center space-x-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          goal.completed ? 'bg-green-500' : 'bg-primary-500'
+                        }`}></div>
+                        <span className={`text-sm ${goal.completed ? '' : ''}`}>
+                          {mechanism.description}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          ({frequencyLabels[mechanism.frequency]})
+                        </span>
+                      </div>
                       {editingGoal === goal.id && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleRemoveMechanism(goal.id, index)}
+                          onClick={() => handleRemoveMechanismFromGoal(goal.id, mechanism.id)}
                           className="text-red-600 hover:text-red-700 p-1"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -430,12 +452,12 @@ export default function MetasPage() {
         {goals.length === 0 && (
           <Card className="text-center py-12">
             <CardContent>
-              <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No tienes metas establecidas</h3>
-              <p className="text-gray-500 mb-4">
+              <Target className="h-12 w-12  mx-auto mb-4" />
+              <h3 className="text-lg font-medium  mb-2">No tienes metas establecidas</h3>
+              <p className=" mb-4">
                 Comienza creando tu primera meta para darle dirección a tu crecimiento personal
               </p>
-              <Button onClick={() => setShowAddGoal(true)}>
+              <Button onClick={() => setShowAddGoal(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
                 <Plus className="mr-2 h-4 w-4" />
                 Crear mi primera meta
               </Button>

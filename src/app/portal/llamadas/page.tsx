@@ -30,10 +30,10 @@ interface Call {
 }
 
 const callStatuses = {
-  scheduled: { label: 'Programada', color: 'bg-blue-100 text-blue-800', icon: Calendar },
-  completed: { label: 'Completada', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-  rescheduled: { label: 'Re-agendada', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle },
-  missed: { label: 'No realizada', color: 'bg-red-100 text-red-800', icon: XCircle }
+  scheduled: { label: 'Programada', color: 'bg-blue-100 ', icon: Calendar },
+  completed: { label: 'Completada', color: 'bg-green-100 ', icon: CheckCircle },
+  rescheduled: { label: 'Re-agendada', color: 'bg-yellow-100 ', icon: AlertCircle },
+  missed: { label: 'No realizada', color: 'bg-red-100 ', icon: XCircle }
 }
 
 const scoreLabels = {
@@ -158,8 +158,8 @@ export default function LlamadasPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Gestión de Llamadas</h1>
-        <p className="text-gray-600 mt-2">
+        <h1 className="text-3xl font-bold ">Gestión de Llamadas</h1>
+        <p className=" mt-2">
           Programa y gestiona las llamadas de seguimiento con los líderes
         </p>
       </div>
@@ -168,12 +168,12 @@ export default function LlamadasPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Llamadas</CardTitle>
-            <Phone className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium ">Total Llamadas</CardTitle>
+            <Phone className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalCalls}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold ">{totalCalls}</div>
+            <p className="text-xs ">
               Este mes
             </p>
           </CardContent>
@@ -181,12 +181,12 @@ export default function LlamadasPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completadas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium ">Completadas</CardTitle>
+            <CheckCircle className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{completedCalls}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold ">{completedCalls}</div>
+            <p className="text-xs ">
               {totalCalls > 0 ? Math.round((completedCalls / totalCalls) * 100) : 0}% completado
             </p>
           </CardContent>
@@ -194,12 +194,12 @@ export default function LlamadasPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Puntaje Promedio</CardTitle>
-            <Star className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium ">Puntaje Promedio</CardTitle>
+            <Star className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{averageScore.toFixed(1)}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold ">{averageScore.toFixed(1)}</div>
+            <p className="text-xs ">
               De 3.0 máximo
             </p>
           </CardContent>
@@ -207,12 +207,12 @@ export default function LlamadasPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium ">Pendientes</CardTitle>
+            <Clock className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{upcomingCalls.length}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold ">{upcomingCalls.length}</div>
+            <p className="text-xs ">
               Por realizar
             </p>
           </CardContent>
@@ -231,7 +231,7 @@ export default function LlamadasPage() {
       {showAddCall && (
         <Card className="mb-6 border-primary-200">
           <CardHeader>
-            <CardTitle>Programar Nueva Llamada</CardTitle>
+            <CardTitle className="">Programar Nueva Llamada</CardTitle>
             <CardDescription>
               Establece una nueva llamada de seguimiento
             </CardDescription>
@@ -239,7 +239,7 @@ export default function LlamadasPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium  mb-2">
                   Líder
                 </label>
                 <input
@@ -252,7 +252,7 @@ export default function LlamadasPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium  mb-2">
                   Senior
                 </label>
                 <input
@@ -267,7 +267,7 @@ export default function LlamadasPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium  mb-2">
                   Fecha y Hora
                 </label>
                 <input
@@ -279,7 +279,7 @@ export default function LlamadasPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium  mb-2">
                   Notas (opcional)
                 </label>
                 <input
@@ -293,12 +293,13 @@ export default function LlamadasPage() {
             </div>
 
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowAddCall(false)}>
+              <Button variant="outline" onClick={() => setShowAddCall(false)} className="bg-blue-600 hover:bg-blue-700 text-white">
                 Cancelar
               </Button>
               <Button 
                 onClick={handleAddCall}
                 disabled={!newCall.leaderName || !newCall.seniorName}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Programar Llamada
               </Button>
@@ -312,12 +313,12 @@ export default function LlamadasPage() {
         <Card className="mb-6 border-red-200 bg-red-50">
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
-              <AlertCircle className="h-5 w-5 text-red-600" />
+              <AlertCircle className="h-5 w-5 " />
               <div>
-                <h3 className="font-medium text-red-800">
+                <h3 className="font-medium ">
                   {overdueCalls.length} llamada{overdueCalls.length > 1 ? 's' : ''} vencida{overdueCalls.length > 1 ? 's' : ''}
                 </h3>
-                <p className="text-sm text-red-600">
+                <p className="text-sm ">
                   Tienes llamadas pendientes que debieron realizarse
                 </p>
               </div>
@@ -329,7 +330,7 @@ export default function LlamadasPage() {
       {/* Calls List */}
       <div className="space-y-6">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">
+          <h2 className="text-xl font-semibold  mb-6">
             Todas las Llamadas
           </h2>
           <div className="space-y-4">
@@ -345,8 +346,8 @@ export default function LlamadasPage() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-2">
-                          <StatusIcon className="h-5 w-5 text-gray-400" />
-                          <h3 className="text-lg font-semibold text-gray-900">
+                          <StatusIcon className="h-5 w-5 " />
+                          <h3 className="text-lg font-semibold ">
                             {call.leaderName} - {call.seniorName}
                           </h3>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${callStatuses[call.status].color}`}>
@@ -354,7 +355,7 @@ export default function LlamadasPage() {
                           </span>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm ">
                           <div className="flex items-center space-x-2">
                             <Calendar className="h-4 w-4" />
                             <span>{format(call.scheduledDate, 'dd MMM yyyy, HH:mm', { locale: es })}</span>
@@ -376,7 +377,7 @@ export default function LlamadasPage() {
                         </div>
 
                         {call.notes && (
-                          <p className="mt-2 text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                          <p className="mt-2 text-sm  bg-gray-50 p-2 rounded">
                             <strong>Notas:</strong> {call.notes}
                           </p>
                         )}
@@ -405,7 +406,7 @@ export default function LlamadasPage() {
                               size="sm"
                               variant="outline"
                               onClick={() => handleUpdateCallStatus(call.id, 'missed')}
-                              className="text-red-600 border-red-300 hover:bg-red-50"
+                              className=" border-red-300 hover:bg-red-50"
                             >
                               <XCircle className="h-4 w-4 mr-1" />
                               No realizada
@@ -441,14 +442,14 @@ export default function LlamadasPage() {
       {calls.length === 0 && (
         <Card className="text-center py-12">
           <CardContent>
-            <Phone className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <Phone className="h-12 w-12  mx-auto mb-4" />
+            <h3 className="text-lg font-medium  mb-2">
               No hay llamadas programadas
             </h3>
-            <p className="text-gray-500 mb-4">
+            <p className=" mb-4">
               Comienza programando tu primera llamada de seguimiento
             </p>
-            <Button onClick={() => setShowAddCall(true)}>
+            <Button onClick={() => setShowAddCall(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="mr-2 h-4 w-4" />
               Programar Primera Llamada
             </Button>

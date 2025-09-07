@@ -141,8 +141,8 @@ export default function CalendarioPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Mi Calendario</h1>
-        <p className="text-gray-600 mt-2">
+        <h1 className="text-3xl font-bold ">Mi Calendario</h1>
+        <p className=" mt-2">
           Organiza y gestiona tus actividades diarias
         </p>
       </div>
@@ -152,11 +152,11 @@ export default function CalendarioPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Hoy</CardTitle>
-            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+            <CalendarIcon className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{completedToday}/{totalToday}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold ">{completedToday}/{totalToday}</div>
+            <p className="text-xs ">
               Actividades completadas
             </p>
           </CardContent>
@@ -165,13 +165,13 @@ export default function CalendarioPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Esta Semana</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
+            <Target className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold ">
               {activities.filter(a => a.completed).length}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs ">
               Total completadas
             </p>
           </CardContent>
@@ -180,13 +180,13 @@ export default function CalendarioPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Progreso</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CheckCircle className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold ">
               {totalToday > 0 ? Math.round((completedToday / totalToday) * 100) : 0}%
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs ">
               Eficiencia diaria
             </p>
           </CardContent>
@@ -195,7 +195,7 @@ export default function CalendarioPage() {
 
       {/* Calendar Navigation */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-gray-900">
+        <h2 className="text-xl font-semibold ">
           {format(currentDate, 'MMMM yyyy', { locale: es })}
         </h2>
         <div className="flex space-x-2">
@@ -203,6 +203,7 @@ export default function CalendarioPage() {
             variant="outline"
             size="sm"
             onClick={() => setCurrentDate(subDays(currentDate, 7))}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -210,6 +211,7 @@ export default function CalendarioPage() {
             variant="outline"
             size="sm"
             onClick={() => setCurrentDate(new Date())}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             Hoy
           </Button>
@@ -217,6 +219,7 @@ export default function CalendarioPage() {
             variant="outline"
             size="sm"
             onClick={() => setCurrentDate(addDays(currentDate, 7))}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -235,7 +238,7 @@ export default function CalendarioPage() {
                 <CardTitle className="text-sm text-center">
                   {format(day, 'EEE', { locale: es })}
                 </CardTitle>
-                <p className="text-xs text-center text-gray-500">
+                <p className="text-xs text-center ">
                   {format(day, 'd')}
                 </p>
               </CardHeader>
@@ -255,7 +258,7 @@ export default function CalendarioPage() {
                     </div>
                   ))}
                   {dayActivities.length > 3 && (
-                    <p className="text-xs text-gray-500 text-center">
+                    <p className="text-xs  text-center">
                       +{dayActivities.length - 3} más
                     </p>
                   )}
@@ -286,7 +289,7 @@ export default function CalendarioPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium  mb-2">
                   Título
                 </label>
                 <input
@@ -299,7 +302,7 @@ export default function CalendarioPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium  mb-2">
                   Fecha
                 </label>
                 <input
@@ -312,7 +315,7 @@ export default function CalendarioPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium  mb-2">
                 Descripción
               </label>
               <textarea
@@ -326,7 +329,7 @@ export default function CalendarioPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium  mb-2">
                   Tipo
                 </label>
                 <select
@@ -341,7 +344,7 @@ export default function CalendarioPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium  mb-2">
                   Prioridad
                 </label>
                 <select
@@ -357,12 +360,13 @@ export default function CalendarioPage() {
             </div>
 
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowAddActivity(false)}>
+              <Button variant="outline" onClick={() => setShowAddActivity(false)} className="bg-blue-600 hover:bg-blue-700 text-white">
                 Cancelar
               </Button>
               <Button 
                 onClick={handleAddActivity}
                 disabled={!newActivity.title}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Agregar Actividad
               </Button>
@@ -402,19 +406,19 @@ export default function CalendarioPage() {
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
                     {getTypeIcon(activity.type)}
-                    <h3 className={`font-medium ${activity.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                    <h3 className={`font-medium ${activity.completed ? 'line-through ' : ''}`}>
                       {activity.title}
                     </h3>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      activity.priority === 'high' ? 'bg-red-100 text-red-800' :
-                      activity.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-green-100 text-green-800'
+                      activity.priority === 'high' ? 'bg-red-100 ' :
+                      activity.priority === 'medium' ? 'bg-yellow-100 ' :
+                      'bg-green-100 '
                     }`}>
                       {activity.priority === 'high' ? 'Alta' : activity.priority === 'medium' ? 'Media' : 'Baja'}
                     </span>
                   </div>
                   {activity.description && (
-                    <p className={`text-sm mt-1 ${activity.completed ? 'text-gray-400' : 'text-gray-600'}`}>
+                    <p className={`text-sm mt-1 ${activity.completed ? '' : ''}`}>
                       {activity.description}
                     </p>
                   )}
@@ -424,12 +428,12 @@ export default function CalendarioPage() {
 
             {getActivitiesForDay(new Date()).length === 0 && (
               <div className="text-center py-8">
-                <CalendarIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No hay actividades para hoy</h3>
-                <p className="text-gray-500 mb-4">
+                <CalendarIcon className="h-12 w-12  mx-auto mb-4" />
+                <h3 className="text-lg font-medium  mb-2">No hay actividades para hoy</h3>
+                <p className=" mb-4">
                   Agrega algunas actividades para mantenerte productivo
                 </p>
-                <Button onClick={() => setShowAddActivity(true)}>
+                <Button onClick={() => setShowAddActivity(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Plus className="mr-2 h-4 w-4" />
                   Agregar Actividad
                 </Button>

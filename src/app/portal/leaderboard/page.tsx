@@ -130,13 +130,13 @@ export default function LeaderboardPage() {
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:
-        return <Crown className="h-6 w-6 text-yellow-500" />
+        return <Crown className="h-6 w-6 " />
       case 2:
-        return <Medal className="h-6 w-6 text-gray-400" />
+        return <Medal className="h-6 w-6 " />
       case 3:
-        return <Award className="h-6 w-6 text-amber-600" />
+        return <Award className="h-6 w-6 " />
       default:
-        return <span className="text-lg font-bold text-gray-500">#{rank}</span>
+        return <span className="text-lg font-bold ">#{rank}</span>
     }
   }
 
@@ -173,8 +173,8 @@ export default function LeaderboardPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Leaderboard</h1>
-        <p className="text-gray-600 mt-2">
+        <h1 className="text-3xl font-bold ">Leaderboard</h1>
+        <p className=" mt-2">
           Ranking de líderes por generación y rendimiento general
         </p>
       </div>
@@ -183,12 +183,12 @@ export default function LeaderboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Participantes</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium ">Total Participantes</CardTitle>
+            <Users className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockData.length}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold ">{mockData.length}</div>
+            <p className="text-xs ">
               En todas las generaciones
             </p>
           </CardContent>
@@ -196,14 +196,14 @@ export default function LeaderboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Puntaje Promedio</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium ">Puntaje Promedio</CardTitle>
+            <TrendingUp className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold ">
               {Math.round(mockData.reduce((sum, entry) => sum + entry.totalScore, 0) / mockData.length)}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs ">
               Puntos totales
             </p>
           </CardContent>
@@ -211,12 +211,12 @@ export default function LeaderboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Generación Líder</CardTitle>
-            <Trophy className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium ">Generación Líder</CardTitle>
+            <Trophy className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">C1</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold ">C1</div>
+            <p className="text-xs ">
               Mejor rendimiento promedio
             </p>
           </CardContent>
@@ -224,14 +224,14 @@ export default function LeaderboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Meta Completada</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium ">Meta Completada</CardTitle>
+            <Target className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold ">
               {Math.round(mockData.reduce((sum, entry) => sum + entry.goalsCompletionPercentage, 0) / mockData.length)}%
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs ">
               Promedio de metas
             </p>
           </CardContent>
@@ -247,6 +247,7 @@ export default function LeaderboardPage() {
               variant={selectedGeneration === gen ? 'default' : 'outline'}
               size="sm"
               onClick={() => setSelectedGeneration(gen)}
+              className={selectedGeneration === gen ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}
             >
               {gen === 'all' ? 'Todas' : gen}
             </Button>
@@ -254,12 +255,12 @@ export default function LeaderboardPage() {
         </div>
 
         <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-600">Ordenar por:</span>
+          <span className="text-sm ">Ordenar por:</span>
           <Button
             variant="outline"
             size="sm"
             onClick={() => handleSort('total')}
-            className="flex items-center space-x-1"
+            className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-700 text-white"
           >
             <span>Total</span>
             {getSortIcon('total')}
@@ -268,7 +269,7 @@ export default function LeaderboardPage() {
             variant="outline"
             size="sm"
             onClick={() => handleSort('goals')}
-            className="flex items-center space-x-1"
+            className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-700 text-white"
           >
             <span>Metas</span>
             {getSortIcon('goals')}
@@ -277,7 +278,7 @@ export default function LeaderboardPage() {
             variant="outline"
             size="sm"
             onClick={() => handleSort('activities')}
-            className="flex items-center space-x-1"
+            className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-700 text-white"
           >
             <span>Actividades</span>
             {getSortIcon('activities')}
@@ -307,7 +308,7 @@ export default function LeaderboardPage() {
                   
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">
+                      <h3 className="text-lg font-semibold ">
                         {entry.name}
                       </h3>
                       <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
@@ -317,33 +318,33 @@ export default function LeaderboardPage() {
                     
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div className="flex items-center space-x-2">
-                        <Target className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600">Metas: {entry.goalsCompletionPercentage}%</span>
+                        <Target className="h-4 w-4 " />
+                        <span className="">Metas: {entry.goalsCompletionPercentage}%</span>
                       </div>
                       
                       <div className="flex items-center space-x-2">
-                        <Star className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600">Actividades: {entry.activitiesCompletionPercentage}%</span>
+                        <Star className="h-4 w-4 " />
+                        <span className="">Actividades: {entry.activitiesCompletionPercentage}%</span>
                       </div>
                       
                       <div className="flex items-center space-x-2">
-                        <Phone className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600">Llamadas: {entry.callsScore}/3.0</span>
+                        <Phone className="h-4 w-4 " />
+                        <span className="">Llamadas: {entry.callsScore}/3.0</span>
                       </div>
                       
                       <div className="flex items-center space-x-2">
-                        <Trophy className="h-4 w-4 text-gray-400" />
-                        <span className="font-semibold text-gray-900">Total: {entry.totalScore.toFixed(1)}</span>
+                        <Trophy className="h-4 w-4 " />
+                        <span className="font-semibold ">Total: {entry.totalScore.toFixed(1)}</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-gray-900">
+                  <div className="text-2xl font-bold ">
                     {entry.totalScore.toFixed(1)}
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm ">
                     puntos totales
                   </div>
                 </div>
@@ -355,7 +356,7 @@ export default function LeaderboardPage() {
 
       {/* Generation Breakdown */}
       <div className="mt-12">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">
+        <h2 className="text-xl font-semibold  mb-6">
           Rendimiento por Generación
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -378,17 +379,17 @@ export default function LeaderboardPage() {
                 <CardContent>
                   <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Puntaje Promedio:</span>
+                      <span className="text-sm ">Puntaje Promedio:</span>
                       <span className="font-semibold">{avgScore.toFixed(1)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Mejor Participante:</span>
+                      <span className="text-sm ">Mejor Participante:</span>
                       <span className="text-sm font-medium">
                         {genData.length > 0 ? genData[0].name : 'N/A'}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Metas Promedio:</span>
+                      <span className="text-sm ">Metas Promedio:</span>
                       <span className="text-sm">
                         {genData.length > 0 
                           ? Math.round(genData.reduce((sum, entry) => sum + entry.goalsCompletionPercentage, 0) / genData.length)
@@ -407,11 +408,11 @@ export default function LeaderboardPage() {
       {sortedData.length === 0 && (
         <Card className="text-center py-12">
           <CardContent>
-            <Trophy className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <Trophy className="h-12 w-12  mx-auto mb-4" />
+            <h3 className="text-lg font-medium  mb-2">
               No hay datos disponibles
             </h3>
-            <p className="text-gray-500">
+            <p className="">
               No se encontraron participantes para la generación seleccionada
             </p>
           </CardContent>
