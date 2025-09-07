@@ -9,7 +9,6 @@ import {
   Edit, 
   Trash2, 
   CheckCircle, 
-  Calendar,
   TrendingUp
 } from 'lucide-react'
 
@@ -50,36 +49,6 @@ const frequencyLabels = {
   yearly: 'Anual'
 }
 
-const suggestedMechanisms = {
-  Personal: [
-    'Meditación de 10 minutos',
-    'Lectura personal 30 min',
-    'Ejercicio físico',
-    'Gratitud diaria',
-    'Reflexión personal'
-  ],
-  Finanzas: [
-    'Revisar presupuesto semanal',
-    'Ahorrar 10% del ingreso',
-    'Invertir en educación financiera',
-    'Reducir gastos innecesarios',
-    'Seguimiento de gastos'
-  ],
-  Salud: [
-    'Ejercicio 30 min diarios',
-    'Comer 5 porciones de frutas/verduras',
-    'Beber 2L de agua',
-    'Dormir 8 horas',
-    'Caminar 10,000 pasos'
-  ],
-  Familia: [
-    'Tiempo de calidad con familia',
-    'Comunicación abierta',
-    'Apoyo emocional',
-    'Actividades familiares',
-    'Expresar amor y aprecio'
-  ]
-}
 
 export default function MetasPage() {
   const [goals, setGoals] = useState<Goal[]>([
@@ -152,7 +121,7 @@ export default function MetasPage() {
     const newMechanism: Mechanism = {
       id: Date.now().toString(),
       description: description.trim(),
-      frequency: frequency as any
+      frequency: frequency as Mechanism['frequency']
     }
 
     setNewGoal({

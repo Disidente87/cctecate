@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase-server'
 import { supabase } from '@/lib/supabase'
 
 export interface Generation {
@@ -19,8 +18,6 @@ export interface Generation {
 
 export async function getActiveGeneration(): Promise<Generation | null> {
   try {
-    const supabase = await createClient()
-    
     const { data, error } = await supabase
       .rpc('get_active_generation')
       .single()
@@ -30,7 +27,7 @@ export async function getActiveGeneration(): Promise<Generation | null> {
       return null
     }
 
-    return data
+    return data as Generation
   } catch (error) {
     console.error('Error in getActiveGeneration:', error)
     return null
