@@ -22,7 +22,22 @@ CREATE TABLE generations (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT UNIQUE NOT NULL,
   description TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  -- Fechas de registro
+  registration_start_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  registration_end_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  -- Fechas de la generación
+  generation_start_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  generation_graduation_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  -- Fechas de entrenamientos
+  basic_training_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  advanced_training_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  pl1_training_date TIMESTAMP WITH TIME ZONE,
+  pl2_training_date TIMESTAMP WITH TIME ZONE,
+  pl3_training_date TIMESTAMP WITH TIME ZONE,
+  -- Estado de la generación
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Tabla de metas
@@ -380,9 +395,50 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Función para obtener la generación activa basada en la fecha actual
+CREATE OR REPLACE FUNCTION get_active_generation()
+RETURNS TABLE (
+  id UUID,
+  name TEXT,
+  description TEXT,
+  registration_start_date TIMESTAMP WITH TIME ZONE,
+  registration_end_date TIMESTAMP WITH TIME ZONE,
+  generation_start_date TIMESTAMP WITH TIME ZONE,
+  generation_graduation_date TIMESTAMP WITH TIME ZONE,
+  basic_training_date TIMESTAMP WITH TIME ZONE,
+  advanced_training_date TIMESTAMP WITH TIME ZONE,
+  pl1_training_date TIMESTAMP WITH TIME ZONE,
+  pl2_training_date TIMESTAMP WITH TIME ZONE,
+  pl3_training_date TIMESTAMP WITH TIME ZONE,
+  is_active BOOLEAN
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    g.id,
+    g.name,
+    g.description,
+    g.registration_start_date,
+    g.registration_end_date,
+    g.generation_start_date,
+    g.generation_graduation_date,
+    g.basic_training_date,
+    g.advanced_training_date,
+    g.pl1_training_date,
+    g.pl2_training_date,
+    g.pl3_training_date,
+    g.is_active
+  FROM generations g
+  WHERE g.is_active = TRUE
+    AND CURRENT_TIMESTAMP BETWEEN g.registration_start_date AND g.registration_end_date
+  ORDER BY g.registration_start_date DESC
+  LIMIT 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Comentarios en las tablas
 COMMENT ON TABLE profiles IS 'Perfiles de usuario que extienden auth.users';
-COMMENT ON TABLE generations IS 'Generaciones del programa CC Tecate';
+COMMENT ON TABLE generations IS 'Generaciones del programa CC Tecate con fechas de registro y entrenamientos';
 COMMENT ON TABLE goals IS 'Metas personales de los usuarios';
 COMMENT ON TABLE mechanisms IS 'Mecanismos de acción para alcanzar las metas';
 COMMENT ON TABLE activities IS 'Actividades gustosas semanales';

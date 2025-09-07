@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { supabase } from '@/lib/supabase'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { getActiveGeneration, type Generation } from '@/lib/generations'
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -14,14 +15,35 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'lider' as 'lider' | 'senior' | 'admin',
-    generation: ''
+    role: 'lider' as 'lider' | 'senior' | 'admin'
   })
+  const [activeGeneration, setActiveGeneration] = useState<Generation | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [isLoadingGeneration, setIsLoadingGeneration] = useState(true)
   const router = useRouter()
+
+  // Cargar generación activa al montar el componente
+  useEffect(() => {
+    const loadActiveGeneration = async () => {
+      try {
+        const generation = await getActiveGeneration()
+        setActiveGeneration(generation)
+        if (!generation) {
+          setError('No hay una generación activa para registro en este momento. Contacta al administrador.')
+        }
+      } catch (error) {
+        console.error('Error loading active generation:', error)
+        setError('Error al cargar la información de generación. Intenta de nuevo.')
+      } finally {
+        setIsLoadingGeneration(false)
+      }
+    }
+
+    loadActiveGeneration()
+  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData(prev => ({
@@ -34,6 +56,12 @@ export default function RegisterPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
+
+    if (!activeGeneration) {
+      setError('No hay una generación activa para registro.')
+      setLoading(false)
+      return
+    }
 
     if (formData.password !== formData.confirmPassword) {
       setError('Las contraseñas no coinciden')
@@ -55,7 +83,7 @@ export default function RegisterPage() {
           data: {
             name: formData.name,
             role: formData.role,
-            generation: formData.generation
+            generation: activeGeneration.name
           }
         }
       })
@@ -73,28 +101,28 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center space-x-2 mb-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-lg"></div>
-            <span className="text-2xl font-bold text-gray-900">CC Tecate</span>
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-green-500 rounded-lg"></div>
+            <span className="text-2xl font-bold text-gray-800">CC Tecate</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Únete a nuestra comunidad</h1>
-          <p className="text-gray-600">Crea tu cuenta y comienza tu transformación</p>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">Únete a nuestra comunidad</h1>
+          <p className="text-gray-700">Crea tu cuenta y comienza tu transformación</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Crear Cuenta</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-gray-800">Crear Cuenta</CardTitle>
+            <CardDescription className="text-gray-700">
               Completa el formulario para registrarte
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="name" className="block text-sm font-medium text-gray-800 mb-2">
                   Nombre completo
                 </label>
                 <input
@@ -103,14 +131,14 @@ export default function RegisterPage() {
                   type="text"
                   value={formData.name}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
                   placeholder="Tu nombre completo"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-800 mb-2">
                   Correo electrónico
                 </label>
                 <input
@@ -119,14 +147,14 @@ export default function RegisterPage() {
                   type="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
                   placeholder="tu@email.com"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="role" className="block text-sm font-medium text-gray-800 mb-2">
                   Rol
                 </label>
                 <select
@@ -134,33 +162,46 @@ export default function RegisterPage() {
                   name="role"
                   value={formData.role}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
                   required
                 >
-                  <option value="lider">Líder</option>
-                  <option value="senior">Senior</option>
-                  <option value="admin">Admin</option>
+                  <option value="lider" className="text-gray-800">Líder</option>
+                  <option value="senior" className="text-gray-800">Senior</option>
+                  <option value="admin" className="text-gray-800">Admin</option>
                 </select>
               </div>
 
               <div>
-                <label htmlFor="generation" className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-800 mb-2">
                   Generación
                 </label>
-                <input
-                  id="generation"
-                  name="generation"
-                  type="text"
-                  value={formData.generation}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="Ej: C1, C2, C3..."
-                  required
-                />
+                {isLoadingGeneration ? (
+                  <div className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 flex items-center">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    <span className="text-gray-600">Cargando generación...</span>
+                  </div>
+                ) : activeGeneration ? (
+                  <div className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-green-50 border-green-200">
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                      <span className="text-green-800 font-medium">{activeGeneration.name}</span>
+                    </div>
+                    <p className="text-sm text-green-600 mt-1">
+                      Registro abierto hasta: {new Date(activeGeneration.registration_end_date).toLocaleDateString('es-ES')}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="w-full px-3 py-2 border border-red-300 rounded-md shadow-sm bg-red-50">
+                    <div className="flex items-center">
+                      <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
+                      <span className="text-red-800">No hay generación activa</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-800 mb-2">
                   Contraseña
                 </label>
                 <div className="relative">
@@ -170,7 +211,7 @@ export default function RegisterPage() {
                     type={showPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
                     placeholder="Mínimo 6 caracteres"
                     required
                   />
@@ -189,7 +230,7 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-800 mb-2">
                   Confirmar contraseña
                 </label>
                 <div className="relative">
@@ -199,7 +240,7 @@ export default function RegisterPage() {
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
                     placeholder="Confirma tu contraseña"
                     required
                   />
@@ -225,8 +266,8 @@ export default function RegisterPage() {
 
               <Button
                 type="submit"
-                className="w-full"
-                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
+                disabled={loading || !activeGeneration || isLoadingGeneration}
               >
                 {loading ? (
                   <>
@@ -240,9 +281,9 @@ export default function RegisterPage() {
             </form>
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-700">
                 ¿Ya tienes cuenta?{' '}
-                <Link href="/auth/login" className="text-primary-600 hover:text-primary-500 font-medium">
+                <Link href="/auth/login" className="text-blue-600 hover:text-blue-500 font-medium">
                   Inicia sesión aquí
                 </Link>
               </p>
@@ -251,7 +292,7 @@ export default function RegisterPage() {
         </Card>
 
         <div className="mt-6 text-center">
-          <Link href="/" className="text-sm text-gray-600 hover:text-gray-900">
+          <Link href="/" className="text-sm text-gray-700 hover:text-gray-900">
             ← Volver al inicio
           </Link>
         </div>
