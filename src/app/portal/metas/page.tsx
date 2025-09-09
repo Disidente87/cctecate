@@ -27,6 +27,22 @@ const goalCategories = [
   'Recreación'
 ]
 
+// Función para obtener el color fijo de cada categoría
+const getCategoryColor = (category: string): string => {
+  const categoryColors: Record<string, string> = {
+    'Personal': 'bg-yellow-100 border-yellow-300 text-yellow-800',
+    'Finanzas': 'bg-green-100 border-green-300 text-green-800',
+    'Salud': 'bg-red-100 border-red-300 text-red-800',
+    'Familia': 'bg-blue-100 border-blue-300 text-blue-800',
+    'Carrera': 'bg-purple-100 border-purple-300 text-purple-800',
+    'Relaciones': 'bg-pink-100 border-pink-300 text-pink-800',
+    'Espiritual': 'bg-indigo-100 border-indigo-300 text-indigo-800',
+    'Recreación': 'bg-orange-100 border-orange-300 text-orange-800'
+  }
+  
+  return categoryColors[category] || 'bg-gray-100 border-gray-300 text-gray-800'
+}
+
 // Función para calcular el progreso de una meta usando la misma lógica del calendario
 const calculateGoalProgress = async (goal: GoalWithMechanisms, userId: string): Promise<number> => {
   if (goal.mechanisms.length === 0) {
@@ -178,6 +194,15 @@ export default function MetasPage() {
           // Calcular progreso dinámicamente para cada meta
           const goalsWithProgress = await Promise.all(
             userGoals.map(async (goal) => {
+              // Si la meta está marcada como completada, usar 100% independientemente del progreso real
+              if (goal.completed) {
+                return {
+                  ...goal,
+                  progress_percentage: 100
+                }
+              }
+              
+              // Si no está completada, calcular el progreso real
               const progressPercentage = await calculateGoalProgress(goal, user.id)
               return {
                 ...goal,
@@ -237,14 +262,27 @@ export default function MetasPage() {
     const goal = goals.find(g => g.id === goalId)
     if (!goal || !user) return
 
+    // Si se está intentando completar una meta, verificar que tenga 100% de progreso
+    if (!goal.completed && goal.progress_percentage < 100) {
+      setError('No puedes marcar una meta como completada hasta que tenga 100% de progreso')
+      return
+    }
+
     const updatedGoal = await updateGoal(goalId, {
       completed: !goal.completed,
       completed_by_senior_id: !goal.completed ? user.id : null,
-      progress_percentage: !goal.completed ? 100 : 0
+      progress_percentage: !goal.completed ? 100 : goal.progress_percentage // Mantener el progreso real al desmarcar
     })
 
     if (updatedGoal) {
-      setGoals(goals.map(g => g.id === goalId ? { ...g, ...updatedGoal } : g))
+      // Si se está desmarcando, recalcular el progreso real
+      if (goal.completed) {
+        const realProgress = await calculateGoalProgress(goal, user.id)
+        setGoals(goals.map(g => g.id === goalId ? { ...g, ...updatedGoal, progress_percentage: realProgress } : g))
+      } else {
+        setGoals(goals.map(g => g.id === goalId ? { ...g, ...updatedGoal } : g))
+      }
+      setError(null) // Limpiar errores al completar exitosamente
     }
   }
 
@@ -337,7 +375,7 @@ export default function MetasPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Progreso General</CardTitle>
+            <CardTitle className="text-sm font-medium">Progreso Aprobado</CardTitle>
             <TrendingUp className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
@@ -555,17 +593,21 @@ export default function MetasPage() {
       {/* Goals List */}
       <div className="space-y-6">
         {goals.map((goal) => (
-          <Card key={goal.id} className={goal.completed ? 'bg-green-50 border-green-200' : ''}>
+          <Card key={goal.id} className={`${goal.completed ? 'bg-green-50 border-green-200' : getCategoryColor(goal.category).replace('bg-', 'border-').replace('-100', '-200')}`}>
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-start space-x-3">
                   <button
                     onClick={() => handleToggleGoal(goal.id)}
+                    disabled={!goal.completed && goal.progress_percentage < 100}
                     className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mt-1 ${
                       goal.completed 
                         ? 'bg-green-500 border-green-500 text-white' 
-                        : 'border-gray-300 hover:border-primary-500'
+                        : goal.progress_percentage < 100
+                          ? 'border-gray-300 bg-gray-100 cursor-not-allowed opacity-50'
+                          : 'border-gray-300 hover:border-primary-500'
                     }`}
+                    title={!goal.completed && goal.progress_percentage < 100 ? 'Completa el 100% del progreso para marcar como completada' : ''}
                   >
                     {goal.completed && <CheckCircle className="h-4 w-4" />}
                   </button>
@@ -575,7 +617,7 @@ export default function MetasPage() {
                     </CardTitle>
                     <div className="space-y-3 mt-2">
                       <div className="flex items-center space-x-4">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCategoryColor(goal.category)}`}>
                           {goal.category}
                         </span>
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">

@@ -29,6 +29,7 @@ interface MechanismProgress {
 interface GoalProgress {
   goalId: string
   goalDescription: string
+  category: string
   totalMechanisms: number
   activeMechanisms: number
   avgProgress: number
@@ -1195,12 +1196,20 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
         progressUntilToday: Math.round(progressUntilToday * 100) / 100
       })
 
+      // Obtener la categoría de la meta
+      const { data: goalData } = await supabase
+        .from('goals')
+        .select('category')
+        .eq('id', goalId)
+        .single()
+
       // Actualizar solo esta meta en el estado
       setGoalsProgress(prev => ({
         ...prev,
         [goalId]: {
           goalId,
           goalDescription: goalInfo?.description || 'Meta sin nombre',
+          category: goalData?.category || 'Sin categoría',
           totalMechanisms: mechanisms?.length || 0,
           activeMechanisms: mechanisms?.length || 0,
           avgProgress: progressPercentage,
@@ -1241,7 +1250,7 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
       // Obtener información básica de las metas
       const { data: goalsData } = await supabase
         .from('goals')
-        .select('id, description')
+        .select('id, description, category')
         .in('id', targetGoalIds)
 
       // Calcular progreso para cada meta
@@ -1483,9 +1492,12 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
       const newGoalsProgress: Record<string, GoalProgress> = {}
       results.forEach(({ goalId, goalDescription, progressData }) => {
         if (progressData) {
+          // Obtener la categoría de la meta
+          const goal = goalsData?.find(g => g.id === goalId)
           newGoalsProgress[goalId] = {
             goalId,
             goalDescription,
+            category: goal?.category || 'Sin categoría',
             totalMechanisms: progressData.total_mechanisms,
             activeMechanisms: progressData.active_mechanisms,
             avgProgress: progressData.avg_progress,

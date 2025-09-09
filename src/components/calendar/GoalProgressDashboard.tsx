@@ -6,6 +6,7 @@ import { useGoalProgress } from '@/hooks/useOptimizedCalendar'
 interface GoalProgress {
   goalId: string
   goalDescription: string
+  category: string
   totalMechanisms: number
   activeMechanisms: number
   avgProgress: number
@@ -19,25 +20,20 @@ interface GoalProgressCardProps {
   goal: GoalProgress
 }
 
-// Función para generar colores únicos para cada meta (igual que en el calendario)
-const getGoalColor = (goalId: string): string => {
-  const colors = [
-    'bg-blue-100 border-blue-300 text-blue-800',
-    'bg-green-100 border-green-300 text-green-800',
-    'bg-purple-100 border-purple-300 text-purple-800',
-    'bg-orange-100 border-orange-300 text-orange-800',
-    'bg-pink-100 border-pink-300 text-pink-800',
-    'bg-indigo-100 border-indigo-300 text-indigo-800',
-    'bg-yellow-100 border-yellow-300 text-yellow-800',
-    'bg-red-100 border-red-300 text-red-800',
-  ]
-  
-  // Generar un índice basado en el goalId
-  let hash = 0
-  for (let i = 0; i < goalId.length; i++) {
-    hash = ((hash << 5) - hash + goalId.charCodeAt(i)) & 0xffffffff
+// Función para obtener el color fijo de cada categoría (igual que en metas)
+const getCategoryColor = (category: string): string => {
+  const categoryColors: Record<string, string> = {
+    'Personal': 'bg-yellow-100 border-yellow-300 text-yellow-800',
+    'Finanzas': 'bg-green-100 border-green-300 text-green-800',
+    'Salud': 'bg-red-100 border-red-300 text-red-800',
+    'Familia': 'bg-blue-100 border-blue-300 text-blue-800',
+    'Carrera': 'bg-purple-100 border-purple-300 text-purple-800',
+    'Relaciones': 'bg-pink-100 border-pink-300 text-pink-800',
+    'Espiritual': 'bg-indigo-100 border-indigo-300 text-indigo-800',
+    'Recreación': 'bg-orange-100 border-orange-300 text-orange-800'
   }
-  return colors[Math.abs(hash) % colors.length]
+  
+  return categoryColors[category] || 'bg-gray-100 border-gray-300 text-gray-800'
 }
 
 const GoalProgressCard: React.FC<GoalProgressCardProps> = ({ goal }) => {
@@ -61,7 +57,7 @@ const GoalProgressCard: React.FC<GoalProgressCardProps> = ({ goal }) => {
     return 'bg-red-500'
   }
 
-  const goalColor = getGoalColor(goal.goalId)
+  const goalColor = getCategoryColor(goal.category)
   
   return (
     <div className={`${goalColor} rounded-lg shadow p-3 hover:shadow-md transition-shadow`}>
