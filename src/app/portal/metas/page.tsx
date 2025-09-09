@@ -14,6 +14,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { getUserGoals, createGoalWithMechanisms, updateGoal, deleteGoal, deleteMechanism } from '@/lib/goals'
 import type { GoalWithMechanisms, Mechanism, MechanismInsert } from '@/types/database'
+import { format } from 'date-fns'
 
 const goalCategories = [
   'Personal',
@@ -25,6 +26,118 @@ const goalCategories = [
   'Espiritual',
   'Recreación'
 ]
+
+// Función para calcular el progreso de una meta usando la misma lógica del calendario
+const calculateGoalProgress = async (goal: GoalWithMechanisms, userId: string): Promise<number> => {
+  if (goal.mechanisms.length === 0) {
+    return 0
+  }
+
+  try {
+    // Obtener fechas de generación para calcular el período
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('generation')
+      .eq('id', userId)
+      .single()
+
+    let mechanismStartDate = new Date()
+    let mechanismEndDate = new Date()
+
+    if (profile?.generation) {
+      const { data: generationData } = await supabase
+        .from('generations')
+        .select('pl1_training_date, pl3_training_date')
+        .eq('name', profile.generation)
+        .single()
+
+      if (generationData?.pl1_training_date && generationData?.pl3_training_date) {
+        const pl1Date = new Date(generationData.pl1_training_date)
+        const pl3Date = new Date(generationData.pl3_training_date)
+        
+        // Mecanismos empiezan 1 semana después de PL1
+        mechanismStartDate = new Date(pl1Date)
+        mechanismStartDate.setDate(mechanismStartDate.getDate() + 7)
+        
+        // Mecanismos terminan 1 semana antes de PL3
+        mechanismEndDate = new Date(pl3Date)
+        mechanismEndDate.setDate(mechanismEndDate.getDate() - 7)
+      }
+    }
+
+    // Calcular actividades totales esperadas para esta meta
+    let totalExpectedActivities = 0
+    let totalCompletedActivities = 0
+
+    for (const mechanism of goal.mechanisms) {
+      // Calcular cuántas actividades se esperan para este mecanismo
+      const startDate = mechanism.start_date ? new Date(mechanism.start_date) : mechanismStartDate
+      const endDate = mechanism.end_date ? new Date(mechanism.end_date) : mechanismEndDate
+      
+      // Usar el período completo para el cálculo
+      const actualStartDate = startDate > mechanismStartDate ? startDate : mechanismStartDate
+      const actualEndDate = endDate < mechanismEndDate ? endDate : mechanismEndDate
+
+      let expectedCount = 0
+      const currentDate = new Date(actualStartDate)
+      
+      while (currentDate <= actualEndDate) {
+        const dayOfWeek = currentDate.getDay()
+        let shouldInclude = false
+
+        switch (mechanism.frequency) {
+          case 'daily':
+            shouldInclude = true
+            break
+          case 'weekly':
+            shouldInclude = dayOfWeek === 1 // Lunes
+            break
+          case '2x_week':
+            shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
+            break
+          case '3x_week':
+            shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
+            break
+          case '4x_week':
+            shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
+            break
+          case '5x_week':
+            shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
+            break
+          case 'biweekly':
+            const daysSincePeriodStart = Math.floor((currentDate.getTime() - actualStartDate.getTime()) / (1000 * 60 * 60 * 24))
+            shouldInclude = daysSincePeriodStart % 14 === 0
+            break
+        }
+
+        if (shouldInclude) {
+          expectedCount++
+        }
+
+        currentDate.setDate(currentDate.getDate() + 1)
+      }
+
+      totalExpectedActivities += expectedCount
+
+      // Contar actividades completadas para este mecanismo
+      const { data: completions } = await supabase
+        .from('mechanism_completions')
+        .select('completed_date')
+        .eq('mechanism_id', mechanism.id)
+        .eq('user_id', userId)
+        .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
+        .lte('completed_date', format(mechanismEndDate, 'yyyy-MM-dd'))
+
+      totalCompletedActivities += completions?.length || 0
+    }
+
+    const progressPercentage = totalExpectedActivities > 0 ? (totalCompletedActivities / totalExpectedActivities) * 100 : 0
+    return Math.round(progressPercentage)
+  } catch (error) {
+    console.error('Error calculating goal progress:', error)
+    return 0
+  }
+}
 
 const frequencyLabels = {
   daily: 'Diario',
@@ -61,7 +174,19 @@ export default function MetasPage() {
         if (user) {
           setUser(user)
           const userGoals = await getUserGoals(user.id)
-          setGoals(userGoals)
+          
+          // Calcular progreso dinámicamente para cada meta
+          const goalsWithProgress = await Promise.all(
+            userGoals.map(async (goal) => {
+              const progressPercentage = await calculateGoalProgress(goal, user.id)
+              return {
+                ...goal,
+                progress_percentage: progressPercentage
+              }
+            })
+          )
+          
+          setGoals(goalsWithProgress)
         } else {
           setError('No se pudo cargar la información del usuario')
         }
@@ -448,21 +573,45 @@ export default function MetasPage() {
                     <CardTitle className={`text-lg ${goal.completed ? 'line-through ' : ''}`}>
                       {goal.description}
                     </CardTitle>
-                    <div className="flex items-center space-x-4 mt-2">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
-                        {goal.category}
-                      </span>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {goal.progress_percentage}% completado
-                      </span>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        {goal.mechanisms.length} mecanismos
-                      </span>
-                      {goal.completed && goal.completed_by_senior_id && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Completada por Senior
+                    <div className="space-y-3 mt-2">
+                      <div className="flex items-center space-x-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                          {goal.category}
                         </span>
-                      )}
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {goal.progress_percentage}% completado
+                        </span>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          {goal.mechanisms.length} mecanismos
+                        </span>
+                        {goal.completed && goal.completed_by_senior_id && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Completada por Senior
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Barra de progreso visual */}
+                      <div className="w-full">
+                        <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                          <span>Progreso</span>
+                          <span className="font-medium">{goal.progress_percentage}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className={`h-2 rounded-full transition-all duration-300 ${
+                              goal.completed 
+                                ? 'bg-green-500' 
+                                : goal.progress_percentage >= 75 
+                                  ? 'bg-blue-500' 
+                                  : goal.progress_percentage >= 50 
+                                    ? 'bg-yellow-500' 
+                                    : 'bg-red-500'
+                            }`}
+                            style={{ width: `${goal.progress_percentage}%` }}
+                          ></div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
