@@ -2,13 +2,13 @@
 
 import React, { useState, useMemo } from 'react'
 import { DndContext, DragEndEvent, DragOverEvent, DragStartEvent, closestCenter } from '@dnd-kit/core'
-import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { Calendar, ChevronLeft, ChevronRight, Plus, MoreHorizontal } from 'lucide-react'
+// import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+// import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
-import { DraggableActivity } from './DraggableActivity'
+// import { cn } from '@/lib/utils'
+// import { DraggableActivity } from './DraggableActivity'
 import { CalendarDay } from './CalendarDay'
 import type { GoalWithMechanisms } from '@/types/database'
 
@@ -26,6 +26,7 @@ interface NotionCalendarProps {
     color: string
   }>
   onUpdateActivityDate?: (activityId: string, newDate: Date) => void
+  onToggleActivityComplete?: (activityId: string) => void
   onAddActivity?: (date: Date, goalId: string) => void
 }
 
@@ -41,7 +42,7 @@ interface CalendarActivity {
   color: string
 }
 
-export function NotionCalendar({ goals, activities, onUpdateActivityDate, onAddActivity }: NotionCalendarProps) {
+export function NotionCalendar({ goals, activities, onUpdateActivityDate, onToggleActivityComplete, onAddActivity }: NotionCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [draggedActivity, setDraggedActivity] = useState<CalendarActivity | null>(null)
 
@@ -51,7 +52,7 @@ export function NotionCalendar({ goals, activities, onUpdateActivityDate, onAddA
     const month = currentDate.getMonth()
     
     const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
+    // const lastDay = new Date(year, month + 1, 0)
     const startDate = new Date(firstDay)
     startDate.setDate(startDate.getDate() - firstDay.getDay())
     
@@ -103,7 +104,7 @@ export function NotionCalendar({ goals, activities, onUpdateActivityDate, onAddA
     onUpdateActivityDate?.(draggedActivity.id, newDate)
   }
 
-  const handleDragOver = (event: DragOverEvent) => {
+  const handleDragOver = (_event: DragOverEvent) => {
     // Manejar el hover durante el drag
   }
 
@@ -196,11 +197,12 @@ export function NotionCalendar({ goals, activities, onUpdateActivityDate, onAddA
           ))}
           
           {/* Días del mes */}
-          {calendarDays.map((day, index) => (
+          {calendarDays.map((day) => (
             <CalendarDay
               key={`${day.date.getFullYear()}-${day.date.getMonth()}-${day.date.getDate()}`}
               day={day}
               onAddActivity={onAddActivity}
+              onToggleActivityComplete={onToggleActivityComplete}
             />
           ))}
         </div>

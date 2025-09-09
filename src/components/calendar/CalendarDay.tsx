@@ -26,9 +26,10 @@ interface CalendarDayProps {
     isToday: boolean
   }
   onAddActivity?: (date: Date, goalId: string) => void
+  onToggleActivityComplete?: (activityId: string) => void
 }
 
-export function CalendarDay({ day, onAddActivity }: CalendarDayProps) {
+export function CalendarDay({ day, onAddActivity, onToggleActivityComplete }: CalendarDayProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: day.date.toISOString(),
   })
@@ -85,6 +86,7 @@ export function CalendarDay({ day, onAddActivity }: CalendarDayProps) {
             <DraggableActivity
               key={activity.id}
               activity={activity}
+              onToggleComplete={onToggleActivityComplete}
             />
           ))}
         </SortableContext>

@@ -18,9 +18,10 @@ interface DraggableActivityProps {
     completed: boolean
     color: string
   }
+  onToggleComplete?: (activityId: string) => void
 }
 
-export function DraggableActivity({ activity }: DraggableActivityProps) {
+export function DraggableActivity({ activity, onToggleComplete }: DraggableActivityProps) {
   const {
     attributes,
     listeners,
@@ -37,8 +38,7 @@ export function DraggableActivity({ activity }: DraggableActivityProps) {
 
   const handleToggleComplete = (e: React.MouseEvent) => {
     e.stopPropagation()
-    // Aquí se implementaría la lógica para marcar como completada
-    console.log('Toggle complete for activity:', activity.id)
+    onToggleComplete?.(activity.id)
   }
 
   return (
