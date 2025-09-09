@@ -66,7 +66,7 @@ CREATE TABLE mechanisms (
   description TEXT NOT NULL,
   frequency VARCHAR(20) NOT NULL DEFAULT 'daily',
   user_id UUID NOT NULL REFERENCES auth.users(id),
-  start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  start_date DATE NOT NULL,
   end_date DATE, -- NULL = indefinido
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -203,6 +203,27 @@ CREATE TRIGGER update_calls_updated_at BEFORE UPDATE ON calls
 CREATE TRIGGER update_mechanism_schedule_exceptions_updated_at BEFORE UPDATE ON mechanism_schedule_exceptions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Trigger para calcular automáticamente start_date y end_date de mecanismos
+CREATE OR REPLACE FUNCTION set_mechanism_dates()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Solo calcular si no se proporcionaron explícitamente
+  IF NEW.start_date IS NULL THEN
+    NEW.start_date := calculate_mechanism_start_date(NEW.user_id);
+  END IF;
+  
+  IF NEW.end_date IS NULL THEN
+    NEW.end_date := calculate_mechanism_end_date(NEW.user_id);
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_mechanism_dates_trigger
+  BEFORE INSERT ON mechanisms
+  FOR EACH ROW EXECUTE FUNCTION set_mechanism_dates();
+
 -- =====================================================
 -- FUNCIONES DE NEGOCIO (MANTENER EXISTENTES + NUEVAS)
 -- =====================================================
@@ -320,6 +341,80 @@ BEGIN
     AND CURRENT_TIMESTAMP BETWEEN g.registration_start_date AND g.registration_end_date
   ORDER BY g.registration_start_date DESC
   LIMIT 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =====================================================
+-- FUNCIONES PARA CÁLCULO AUTOMÁTICO DE FECHAS
+-- =====================================================
+
+-- Función para calcular start_date automáticamente (PL1 + 1 semana)
+CREATE OR REPLACE FUNCTION calculate_mechanism_start_date(p_user_id UUID)
+RETURNS DATE AS $$
+DECLARE
+  v_generation_name TEXT;
+  v_pl1_date TIMESTAMP WITH TIME ZONE;
+  v_start_date DATE;
+BEGIN
+  -- Obtener la generación del usuario
+  SELECT generation INTO v_generation_name
+  FROM profiles 
+  WHERE id = p_user_id;
+  
+  IF v_generation_name IS NULL THEN
+    -- Si no tiene generación, usar fecha actual
+    RETURN CURRENT_DATE;
+  END IF;
+  
+  -- Obtener la fecha PL1 de la generación
+  SELECT pl1_training_date INTO v_pl1_date
+  FROM generations 
+  WHERE name = v_generation_name;
+  
+  IF v_pl1_date IS NULL THEN
+    -- Si no hay PL1 definido, usar fecha actual
+    RETURN CURRENT_DATE;
+  END IF;
+  
+  -- Calcular start_date = PL1 + 1 semana
+  v_start_date := (v_pl1_date + INTERVAL '7 days')::DATE;
+  
+  RETURN v_start_date;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para calcular end_date automáticamente (PL3 - 1 semana)
+CREATE OR REPLACE FUNCTION calculate_mechanism_end_date(p_user_id UUID)
+RETURNS DATE AS $$
+DECLARE
+  v_generation_name TEXT;
+  v_pl3_date TIMESTAMP WITH TIME ZONE;
+  v_end_date DATE;
+BEGIN
+  -- Obtener la generación del usuario
+  SELECT generation INTO v_generation_name
+  FROM profiles 
+  WHERE id = p_user_id;
+  
+  IF v_generation_name IS NULL THEN
+    -- Si no tiene generación, usar NULL (indefinido)
+    RETURN NULL;
+  END IF;
+  
+  -- Obtener la fecha PL3 de la generación
+  SELECT pl3_training_date INTO v_pl3_date
+  FROM generations 
+  WHERE name = v_generation_name;
+  
+  IF v_pl3_date IS NULL THEN
+    -- Si no hay PL3 definido, usar NULL (indefinido)
+    RETURN NULL;
+  END IF;
+  
+  -- Calcular end_date = PL3 - 1 semana
+  v_end_date := (v_pl3_date - INTERVAL '7 days')::DATE;
+  
+  RETURN v_end_date;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

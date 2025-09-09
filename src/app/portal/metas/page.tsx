@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getUserGoals, createGoalWithMechanisms, updateGoal, deleteGoal, deleteMechanism } from '@/lib/goals'
-import type { GoalWithMechanisms, Mechanism } from '@/types/database'
+import type { GoalWithMechanisms, Mechanism, MechanismInsert } from '@/types/database'
 
 const goalCategories = [
   'Personal',
@@ -48,7 +48,7 @@ export default function MetasPage() {
   const [newGoal, setNewGoal] = useState({
     category: '',
     description: '',
-    mechanisms: [] as Omit<Mechanism, 'id' | 'goal_id' | 'created_at' | 'updated_at'>[]
+    mechanisms: [] as Omit<MechanismInsert, 'id' | 'goal_id' | 'created_at' | 'updated_at'>[]
   })
   const [editingGoal, setEditingGoal] = useState<string | null>(null)
 
@@ -136,7 +136,9 @@ export default function MetasPage() {
     const newMechanism = {
       description: description.trim(),
       frequency: frequency as Mechanism['frequency'],
-      user_id: user?.id || ''
+      user_id: user?.id || '',
+      start_date: null, // La BD calculará automáticamente (PL1 + 1 semana)
+      end_date: null    // La BD calculará automáticamente (PL3 - 1 semana)
     }
 
     setNewGoal({

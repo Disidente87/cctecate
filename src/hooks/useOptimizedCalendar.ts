@@ -32,6 +32,7 @@ interface GoalProgress {
   totalMechanisms: number
   activeMechanisms: number
   avgProgress: number
+  progressUntilToday: number
   mechanismsOnTrack: number
   goalCompletionPredictionDays: number | null
   lastActivityDate: Date | null
@@ -71,18 +72,75 @@ const loadBasicCalendarData = async (userId: string, dateRange: { start: Date; e
 
     if (goalsError) throw goalsError
 
+    // Cargar fechas de generación para calcular el período de mecanismos
+    // Primero obtener la generación del usuario desde profiles
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('generation')
+      .eq('id', userId)
+      .single()
+
+    if (profileError) {
+      console.warn('Error loading user profile:', profileError)
+    }
+
+    let generation = null
+    if (profile?.generation) {
+      const { data: generationData, error: generationError } = await supabase
+        .from('generations')
+        .select('pl1_training_date, pl3_training_date')
+        .eq('name', profile.generation)
+        .single()
+
+      if (generationError) {
+        console.warn('Error loading generation dates:', generationError)
+      } else {
+        generation = generationData
+      }
+    }
+
+    console.log('Generation dates loaded:', {
+      userGeneration: profile?.generation,
+      pl1_training_date: generation?.pl1_training_date,
+      pl3_training_date: generation?.pl3_training_date
+    })
+
+    // Calcular el período de mecanismos
+    let mechanismStartDate = dateRange.start
+    let mechanismEndDate = dateRange.end
+
+    if (generation?.pl1_training_date && generation?.pl3_training_date) {
+      const pl1Date = new Date(generation.pl1_training_date)
+      const pl3Date = new Date(generation.pl3_training_date)
+      
+      // Mecanismos empiezan 1 semana después de PL1
+      mechanismStartDate = new Date(pl1Date)
+      mechanismStartDate.setDate(mechanismStartDate.getDate() + 7)
+      
+      // Mecanismos terminan 1 semana antes de PL3
+      mechanismEndDate = new Date(pl3Date)
+      mechanismEndDate.setDate(mechanismEndDate.getDate() - 7)
+
+      console.log('Mechanism period calculated:', {
+        pl1Date: pl1Date.toISOString(),
+        pl3Date: pl3Date.toISOString(),
+        mechanismStartDate: mechanismStartDate.toISOString(),
+        mechanismEndDate: mechanismEndDate.toISOString()
+      })
+    }
+
     // Generar actividades básicas
     const activities: CalendarActivity[] = []
     const startDate = dateRange.start
     const endDate = dateRange.end
 
-    // Cargar excepciones existentes
+    // Cargar excepciones existentes - incluir excepciones que se muevan dentro del rango de fechas
     const { data: exceptions, error: exceptionsError } = await supabase
       .from('mechanism_schedule_exceptions')
       .select('*')
       .eq('user_id', userId)
-      .gte('original_date', format(startDate, 'yyyy-MM-dd'))
-      .lte('original_date', format(endDate, 'yyyy-MM-dd'))
+      .or(`original_date.gte.${format(startDate, 'yyyy-MM-dd')},moved_to_date.gte.${format(startDate, 'yyyy-MM-dd')}`)
+      .or(`original_date.lte.${format(endDate, 'yyyy-MM-dd')},moved_to_date.lte.${format(endDate, 'yyyy-MM-dd')}`)
 
     if (exceptionsError) {
       console.warn('Error loading exceptions:', exceptionsError)
@@ -90,6 +148,29 @@ const loadBasicCalendarData = async (userId: string, dateRange: { start: Date; e
 
     console.log('Goals found:', goals?.length || 0)
     console.log('Exceptions found:', exceptions?.length || 0)
+
+    // Cargar actividades completadas
+    const { data: completions, error: completionsError } = await supabase
+      .from('mechanism_completions')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('completed_date', format(startDate, 'yyyy-MM-dd'))
+      .lte('completed_date', format(endDate, 'yyyy-MM-dd'))
+
+    if (completionsError) {
+      console.warn('Error loading completions:', completionsError)
+    }
+
+    console.log('Completions found:', completions?.length || 0)
+
+    // Función helper para verificar si una actividad está completada
+    const isActivityCompleted = (mechanismId: string, activityDate: Date): boolean => {
+      const dateStr = format(activityDate, 'yyyy-MM-dd')
+      return completions?.some(completion => 
+        completion.mechanism_id === mechanismId && 
+        completion.completed_date === dateStr
+      ) || false
+    }
     
     goals?.forEach(goal => {
       goal.mechanisms?.forEach((mechanism: { id: string; description: string; frequency: string; start_date?: string; end_date?: string }) => {
@@ -101,6 +182,15 @@ const loadBasicCalendarData = async (userId: string, dateRange: { start: Date; e
 
         const currentDate = new Date(startDate)
         while (currentDate <= endDate) {
+          // Verificar si la fecha está dentro del período de mecanismos
+          const isWithinMechanismPeriod = currentDate >= mechanismStartDate && currentDate <= mechanismEndDate
+          
+          if (!isWithinMechanismPeriod) {
+            console.log(`Skipping date ${currentDate.toISOString().split('T')[0]} for mechanism ${mechanism.id} - outside mechanism period (${mechanismStartDate.toISOString().split('T')[0]} to ${mechanismEndDate.toISOString().split('T')[0]})`)
+            currentDate.setDate(currentDate.getDate() + 1)
+            continue
+          }
+
           // Lógica básica de frecuencia
           let shouldInclude = false
           const dayOfWeek = currentDate.getDay()
@@ -132,13 +222,14 @@ const loadBasicCalendarData = async (userId: string, dateRange: { start: Date; e
                 shouldInclude = daysDiff >= 0 && daysDiff % 14 === 0
               }
               break
-            case 'monthly':
-              // Mismo día del mes
-              if (mechanism.start_date) {
-                const startDate = new Date(mechanism.start_date)
-                shouldInclude = currentDate.getDate() === startDate.getDate()
-              }
-              break
+              case 'monthly':
+                // Mismo día del mes, pero solo si está dentro del período de mecanismos
+                if (mechanism.start_date) {
+                  const mechanismStartDate = new Date(mechanism.start_date)
+                  const dayOfMonth = mechanismStartDate.getDate()
+                  shouldInclude = currentDate.getDate() === dayOfMonth
+                }
+                break
             case 'yearly':
               // Mismo día y mes
               if (mechanism.start_date) {
@@ -164,12 +255,22 @@ const loadBasicCalendarData = async (userId: string, dateRange: { start: Date; e
               const [year, month, day] = exception.moved_to_date.split('-').map(Number)
               const movedDate = new Date(year, month - 1, day) // month - 1 porque Date usa 0-indexado
               
+              // Verificar que la fecha movida esté dentro del período de mecanismos
+              const isMovedDateWithinPeriod = movedDate >= mechanismStartDate && movedDate <= mechanismEndDate
+              
+              if (!isMovedDateWithinPeriod) {
+                console.log(`Skipping exception for mechanism ${mechanism.id} - moved date ${exception.moved_to_date} is outside mechanism period`)
+                currentDate.setDate(currentDate.getDate() + 1)
+                continue
+              }
+              
               console.log('Applying exception:', {
                 mechanismId: mechanism.id,
                 originalDate: currentDateStr,
                 movedToDate: exception.moved_to_date,
                 movedDate: movedDate.toISOString(),
-                movedDateLocal: movedDate.toLocaleDateString()
+                movedDateLocal: movedDate.toLocaleDateString(),
+                isWithinPeriod: isMovedDateWithinPeriod
               })
               
               activities.push({
@@ -182,7 +283,7 @@ const loadBasicCalendarData = async (userId: string, dateRange: { start: Date; e
                 originalDate: new Date(currentDate),
                 isScheduled: true,
                 isException: true,
-                isCompleted: false
+                isCompleted: isActivityCompleted(mechanism.id, movedDate)
               })
             } else {
               // Si no hay excepción, crear la actividad en la fecha original
@@ -196,7 +297,7 @@ const loadBasicCalendarData = async (userId: string, dateRange: { start: Date; e
                 originalDate: new Date(currentDate),
                 isScheduled: true,
                 isException: false,
-                isCompleted: false
+                isCompleted: isActivityCompleted(mechanism.id, new Date(currentDate))
               })
             }
           }
@@ -245,30 +346,325 @@ export const useOptimizedCalendar = (userId: string, dateRange: { start: Date; e
     }
   }, [userId, dateRange.start.getTime(), dateRange.end.getTime()])
 
-  // Cargar datos de progreso para cada mecanismo (básico)
+  // Cargar datos de progreso para cada mecanismo
   const loadProgressData = useCallback(async () => {
-    if (activities.length === 0) return
+    console.log('DEBUG: loadProgressData called, activities.length:', activities.length)
+    if (activities.length === 0) {
+      console.log('DEBUG: No activities, returning early')
+      return
+    }
 
     console.log('Loading progress data for', activities.length, 'activities')
+    console.log('DEBUG: Starting loadProgressData function')
 
     const uniqueMechanismIds = [...new Set(activities.map(a => a.mechanismId))]
     
-    // Usar progreso básico sin funciones RPC
-    const newProgressData: Record<string, MechanismProgress> = {}
-    uniqueMechanismIds.forEach(mechanismId => {
-      newProgressData[mechanismId] = {
-        mechanismId,
-        totalExpected: 0,
-        totalCompleted: 0,
-        progressPercentage: 0,
-        lastCompletionDate: null,
-        currentStreak: 0
-      }
-    })
+    try {
+      // Intentar usar la función RPC optimizada
+      console.log('DEBUG: Attempting to use RPC function for progress calculation')
+      
+      // Intentar usar la función RPC optimizada
+      const { data: progressResults, error } = await supabase.rpc('calculate_mechanism_progress', {
+        p_mechanism_id: uniqueMechanismIds[0], // Solo para probar si existe la función
+        p_user_id: userId
+      })
 
-    console.log('Progress data loaded for', Object.keys(newProgressData).length, 'mechanisms')
-    setProgressData(newProgressData)
-  }, [activities.length])
+      if (error) {
+        throw new Error('RPC function not available')
+      }
+
+      // Si la función RPC está disponible, usarla para todos los mecanismos
+      const newProgressData: Record<string, MechanismProgress> = {}
+      
+      for (const mechanismId of uniqueMechanismIds) {
+        const { data: mechanismProgress, error: progressError } = await supabase.rpc('calculate_mechanism_progress', {
+          p_mechanism_id: mechanismId,
+          p_user_id: userId
+        })
+
+        if (progressError) {
+          console.warn(`Error calculating progress for mechanism ${mechanismId}:`, progressError)
+          continue
+        }
+
+        if (mechanismProgress?.[0]) {
+          console.log(`RPC Progress for mechanism ${mechanismId}:`, {
+            totalExpected: mechanismProgress[0].total_expected,
+            totalCompleted: mechanismProgress[0].total_completed,
+            progressPercentage: mechanismProgress[0].progress_percentage,
+            lastCompletionDate: mechanismProgress[0].last_completion_date
+          })
+          
+          newProgressData[mechanismId] = {
+            mechanismId,
+            totalExpected: mechanismProgress[0].total_expected,
+            totalCompleted: mechanismProgress[0].total_completed,
+            progressPercentage: mechanismProgress[0].progress_percentage,
+            lastCompletionDate: mechanismProgress[0].last_completion_date ? new Date(mechanismProgress[0].last_completion_date) : null,
+            currentStreak: mechanismProgress[0].current_streak
+          }
+        }
+      }
+
+      console.log('Progress data loaded for', Object.keys(newProgressData).length, 'mechanisms')
+      setProgressData(newProgressData)
+    } catch (error) {
+      console.warn('RPC function not available, using fallback progress calculation:', error)
+      console.log('DEBUG: Entering fallback calculation')
+      
+      // Fallback: calcular progreso real del mecanismo desde la base de datos
+      const newProgressData: Record<string, MechanismProgress> = {}
+      
+      // Cargar fechas de generación para el período de mecanismos
+      // Primero obtener la generación del usuario desde profiles
+      console.log('DEBUG: Loading profile for user:', userId)
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('generation')
+        .eq('id', userId)
+        .single()
+
+      console.log('DEBUG: Profile loaded:', { profile, profileError })
+
+      let generation = null
+      if (profile?.generation) {
+        console.log('DEBUG: Loading generation data for:', profile.generation)
+        const { data: generationData, error: generationError } = await supabase
+          .from('generations')
+          .select('pl1_training_date, pl3_training_date')
+          .eq('name', profile.generation)
+          .single()
+
+        console.log('DEBUG: Generation data loaded:', { generationData, generationError })
+
+        if (generationError) {
+          console.warn('Error loading generation dates for progress calculation:', generationError)
+        } else {
+          generation = generationData
+        }
+      } else {
+        console.warn('DEBUG: No generation found in profile')
+      }
+
+      // Calcular el período de mecanismos
+      let mechanismStartDate = new Date()
+      let mechanismEndDate = new Date()
+
+      console.log('DEBUG: Generation data for progress calculation:', {
+        pl1_training_date: generation?.pl1_training_date,
+        pl3_training_date: generation?.pl3_training_date,
+        generation: generation
+      })
+
+      if (generation?.pl1_training_date && generation?.pl3_training_date) {
+        const pl1Date = new Date(generation.pl1_training_date)
+        const pl3Date = new Date(generation.pl3_training_date)
+        
+        // Mecanismos empiezan 1 semana después de PL1
+        mechanismStartDate = new Date(pl1Date)
+        mechanismStartDate.setDate(mechanismStartDate.getDate() + 7)
+        
+        // Mecanismos terminan 1 semana antes de PL3
+        mechanismEndDate = new Date(pl3Date)
+        mechanismEndDate.setDate(mechanismEndDate.getDate() - 7)
+        
+        console.log('DEBUG: Mechanism period calculated for progress:', {
+          pl1Date: pl1Date.toISOString().split('T')[0],
+          pl3Date: pl3Date.toISOString().split('T')[0],
+          mechanismStartDate: mechanismStartDate.toISOString().split('T')[0],
+          mechanismEndDate: mechanismEndDate.toISOString().split('T')[0]
+        })
+      } else {
+        console.warn('DEBUG: No generation dates available, using fallback dates')
+      }
+      
+      for (const mechanismId of uniqueMechanismIds) {
+        console.log(`DEBUG: Processing mechanism ${mechanismId}`)
+        try {
+          // Obtener el mecanismo para conocer su frecuencia y fechas
+          const { data: mechanism, error: mechanismError } = await supabase
+            .from('mechanisms')
+            .select('*')
+            .eq('id', mechanismId)
+            .single()
+
+          if (mechanismError || !mechanism) {
+            console.warn(`Error loading mechanism ${mechanismId}:`, mechanismError)
+            continue
+          }
+
+          console.log(`Loading mechanism data for ${mechanismId}:`, {
+            description: mechanism.description,
+            frequency: mechanism.frequency,
+            start_date: mechanism.start_date,
+            end_date: mechanism.end_date
+          })
+
+          // Usar el período de mecanismos calculado, pero respetar la start_date del mecanismo
+          let startDate = mechanismStartDate
+          let endDate = mechanismEndDate
+          
+          // Si el mecanismo tiene una start_date posterior al período de mecanismos, usarla
+          if (mechanism.start_date) {
+            const mechanismStart = new Date(mechanism.start_date)
+            if (mechanismStart > startDate) {
+              startDate = mechanismStart
+            }
+          }
+          
+          // Si el mecanismo tiene una end_date anterior al período de mecanismos, usarla
+          if (mechanism.end_date) {
+            const mechanismEnd = new Date(mechanism.end_date)
+            if (mechanismEnd < endDate) {
+              endDate = mechanismEnd
+            }
+          }
+          
+          const today = new Date()
+          // Para el cálculo de progreso, usar siempre el período completo de mecanismos
+          // No limitar por la fecha actual para permitir cálculo completo del progreso
+          const actualEndDate = endDate
+          
+          console.log(`DEBUG: Date calculation for mechanism ${mechanismId}:`, {
+            today: today.toISOString().split('T')[0],
+            endDate: endDate.toISOString().split('T')[0],
+            endDateYear: endDate.getFullYear(),
+            todayYear: today.getFullYear(),
+            actualEndDate: actualEndDate.toISOString().split('T')[0]
+          })
+          
+          console.log(`DEBUG: Date range for mechanism ${mechanismId}:`, {
+            mechanismStartDate: mechanismStartDate.toISOString().split('T')[0],
+            mechanismEndDate: mechanismEndDate.toISOString().split('T')[0],
+            mechanismStart: mechanism.start_date,
+            mechanismEnd: mechanism.end_date,
+            finalStartDate: startDate.toISOString().split('T')[0],
+            finalEndDate: actualEndDate.toISOString().split('T')[0]
+          })
+
+          let totalExpected = 0
+          const currentDate = new Date(startDate)
+          const expectedDates: string[] = []
+          
+          console.log(`Calculating expected occurrences for mechanism ${mechanismId}:`, {
+            frequency: mechanism.frequency,
+            periodStart: startDate.toISOString().split('T')[0],
+            periodEnd: actualEndDate.toISOString().split('T')[0]
+          })
+          
+          while (currentDate <= actualEndDate) {
+            const dayOfWeek = currentDate.getDay()
+            let shouldInclude = false
+
+            switch (mechanism.frequency) {
+              case 'daily':
+                shouldInclude = true
+                break
+              case 'weekly':
+                shouldInclude = dayOfWeek === 1 // Lunes
+                break
+              case '2x_week':
+                shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
+                break
+              case '3x_week':
+                shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
+                break
+              case '4x_week':
+                shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
+                break
+              case '5x_week':
+                shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
+                break
+              case 'biweekly':
+                // Quincenal: cada 14 días desde el inicio del período de mecanismos
+                const daysSincePeriodStart = Math.floor((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+                shouldInclude = daysSincePeriodStart % 14 === 0
+                break
+            }
+
+            if (shouldInclude) {
+              totalExpected++
+              expectedDates.push(currentDate.toISOString().split('T')[0])
+            }
+
+            currentDate.setDate(currentDate.getDate() + 1)
+          }
+          
+          console.log(`Expected dates for ${mechanismId}:`, expectedDates)
+
+          // Obtener el total completado desde la base de datos
+          const { data: completions, error: completionsError } = await supabase
+            .from('mechanism_completions')
+            .select('completed_date')
+            .eq('mechanism_id', mechanismId)
+            .eq('user_id', userId)
+            .gte('completed_date', format(startDate, 'yyyy-MM-dd'))
+            .lte('completed_date', format(actualEndDate, 'yyyy-MM-dd'))
+
+          if (completionsError) {
+            console.warn(`Error loading completions for mechanism ${mechanismId}:`, completionsError)
+            continue
+          }
+
+          const totalCompleted = completions?.length || 0
+          const progressPercentage = totalExpected > 0 ? (totalCompleted / totalExpected) * 100 : 0
+          
+          // Validación adicional para evitar porcentajes incorrectos
+          if (totalExpected === 0 && totalCompleted > 0) {
+            console.warn(`Mechanism ${mechanismId} has completions but no expected occurrences in period`)
+          }
+
+          // Calcular última fecha de completado
+          let lastCompletionDate = null
+          if (completions && completions.length > 0) {
+            const sortedCompletions = completions.sort((a, b) => 
+              new Date(b.completed_date).getTime() - new Date(a.completed_date).getTime()
+            )
+            lastCompletionDate = new Date(sortedCompletions[0].completed_date)
+          }
+
+          newProgressData[mechanismId] = {
+            mechanismId,
+            totalExpected,
+            totalCompleted,
+            progressPercentage,
+            lastCompletionDate,
+            currentStreak: 0 // Simplificado para fallback
+          }
+
+          console.log(`Progress calculated for mechanism ${mechanismId}:`, {
+            description: mechanism.description,
+            frequency: mechanism.frequency,
+            periodStart: startDate.toISOString().split('T')[0],
+            periodEnd: actualEndDate.toISOString().split('T')[0],
+            totalExpected,
+            totalCompleted,
+            progressPercentage: `${Math.round(progressPercentage)}%`,
+            completions: completions?.map(c => c.completed_date) || []
+          })
+
+        } catch (error) {
+          console.warn(`Error calculating progress for mechanism ${mechanismId}:`, error)
+          // Usar datos básicos como último recurso
+          const mechanismActivities = activities.filter(a => a.mechanismId === mechanismId)
+          const completedActivities = mechanismActivities.filter(a => a.isCompleted)
+          
+          newProgressData[mechanismId] = {
+            mechanismId,
+            totalExpected: mechanismActivities.length,
+            totalCompleted: completedActivities.length,
+            progressPercentage: mechanismActivities.length > 0 ? (completedActivities.length / mechanismActivities.length) * 100 : 0,
+            lastCompletionDate: completedActivities.length > 0 ? 
+              new Date(Math.max(...completedActivities.map(a => a.date.getTime()))) : null,
+            currentStreak: 0
+          }
+        }
+      }
+
+      console.log('Fallback progress data loaded for', Object.keys(newProgressData).length, 'mechanisms')
+      setProgressData(newProgressData)
+    }
+  }, [activities, userId])
 
   // Recalcular progreso específico
   const recalculateProgress = useCallback(async (mechanismId: string) => {
@@ -318,43 +714,82 @@ export const useOptimizedCalendar = (userId: string, dateRange: { start: Date; e
       mechanismIdParts: parts.slice(0, 5)
     })
     
+    // Verificar si existe una excepción donde moved_to_date sea igual a original_date
+    // Esto indica que el mecanismo está regresando a su día original
+    const isReturningToOriginal = originalDate && 
+      newDate.getFullYear() === originalDate.getFullYear() &&
+      newDate.getMonth() === originalDate.getMonth() &&
+      newDate.getDate() === originalDate.getDate()
+    
+    console.log('=== DATE COMPARISON DEBUG ===')
+    console.log('originalDate:', originalDate?.toISOString())
+    console.log('newDate:', newDate.toISOString())
+    console.log('originalDate year:', originalDate?.getFullYear())
+    console.log('newDate year:', newDate.getFullYear())
+    console.log('originalDate month:', originalDate?.getMonth())
+    console.log('newDate month:', newDate.getMonth())
+    console.log('originalDate date:', originalDate?.getDate())
+    console.log('newDate date:', newDate.getDate())
+    console.log('Years match:', originalDate?.getFullYear() === newDate.getFullYear())
+    console.log('Months match:', originalDate?.getMonth() === newDate.getMonth())
+    console.log('Dates match:', originalDate?.getDate() === newDate.getDate())
+    console.log('Is returning to original day:', isReturningToOriginal)
+    console.log('================================')
+    
     setPendingUpdates(prev => new Set([...prev, activityId]))
 
     // Update optimista local
     setActivities(prev => prev.map(activity => 
       activity.id === activityId
-        ? { ...activity, date: newDate, isException: true }
+        ? { ...activity, date: newDate, isException: !isReturningToOriginal }
         : activity
     ))
 
     try {
-      // Intentar crear excepción en DB (si la tabla existe)
+      // Intentar manejar excepción en DB (si la tabla existe)
       let error
       try {
-        const result = await supabase.from('mechanism_schedule_exceptions').upsert({
-          mechanism_id: mechanismId,
-          original_date: format(originalDate, 'yyyy-MM-dd'),
-          moved_to_date: format(newDate, 'yyyy-MM-dd'),
-          user_id: userId
-        })
-        
-        if (result.error) {
-          // Si es un error 409 (conflicto), actualizar la excepción existente
-          if (result.error.code === '23505') {
-            console.log('Exception already exists, updating...')
-            const updateResult = await supabase
-              .from('mechanism_schedule_exceptions')
-              .update({ moved_to_date: format(newDate, 'yyyy-MM-dd') })
-              .eq('mechanism_id', mechanismId)
-              .eq('original_date', format(originalDate, 'yyyy-MM-dd'))
-              .eq('user_id', userId)
-            
-            if (updateResult.error) {
-              throw new Error(`Database update error: ${updateResult.error.message}`)
+        if (isReturningToOriginal) {
+          // Si se regresa al día original, eliminar la excepción
+          console.log('Returning to original day, deleting exception...')
+          const deleteResult = await supabase
+            .from('mechanism_schedule_exceptions')
+            .delete()
+            .eq('mechanism_id', mechanismId)
+            .eq('original_date', format(originalDate, 'yyyy-MM-dd'))
+            .eq('user_id', userId)
+          
+          if (deleteResult.error) {
+            throw new Error(`Database delete error: ${deleteResult.error.message}`)
+          }
+          console.log('Exception deleted successfully')
+        } else {
+          // Si se mueve a un día diferente, crear o actualizar excepción
+          const result = await supabase.from('mechanism_schedule_exceptions').upsert({
+            mechanism_id: mechanismId,
+            original_date: format(originalDate, 'yyyy-MM-dd'),
+            moved_to_date: format(newDate, 'yyyy-MM-dd'),
+            user_id: userId
+          })
+          
+          if (result.error) {
+            // Si es un error 409 (conflicto), actualizar la excepción existente
+            if (result.error.code === '23505') {
+              console.log('Exception already exists, updating...')
+              const updateResult = await supabase
+                .from('mechanism_schedule_exceptions')
+                .update({ moved_to_date: format(newDate, 'yyyy-MM-dd') })
+                .eq('mechanism_id', mechanismId)
+                .eq('original_date', format(originalDate, 'yyyy-MM-dd'))
+                .eq('user_id', userId)
+              
+              if (updateResult.error) {
+                throw new Error(`Database update error: ${updateResult.error.message}`)
+              }
+              console.log('Exception updated successfully')
+            } else {
+              throw new Error(`Database error: ${result.error.message}`)
             }
-            console.log('Exception updated successfully')
-          } else {
-            throw new Error(`Database error: ${result.error.message}`)
           }
         }
         
@@ -373,10 +808,10 @@ export const useOptimizedCalendar = (userId: string, dateRange: { start: Date; e
       console.log('Activity moved successfully')
     } catch (error) {
       console.error('Error moving activity:', error)
-      // Rollback optimista
+      // Rollback optimista - mantener el estado original
       setActivities(prev => prev.map(activity => 
         activity.id === activityId
-          ? { ...activity, date: originalDate, isException: false }
+          ? { ...activity, date: originalDate, isException: activity.isException }
           : activity
       ))
     } finally {
@@ -462,8 +897,32 @@ export const useOptimizedCalendar = (userId: string, dateRange: { start: Date; e
         }
       }
 
-      // Recalcular progreso
+      // Recalcular progreso del mecanismo
       await recalculateProgress(mechanismId)
+      
+      // También recargar el progreso de las metas
+      if (typeof window !== 'undefined') {
+        // Solo en el cliente, recargar el progreso de metas
+        setTimeout(async () => {
+          console.log('Reloading goals progress after completion toggle')
+          // Obtener el goalId del mecanismo para actualizar solo esa meta
+          const { data: mechanism } = await supabase
+            .from('mechanisms')
+            .select('goal_id')
+            .eq('id', mechanismId)
+            .single()
+
+          // Disparar evento personalizado para que el dashboard se actualice
+          window.dispatchEvent(new CustomEvent('mechanismCompleted', { 
+            detail: { 
+              mechanismId, 
+              goalId: mechanism?.goal_id,
+              completed: newCompletionState 
+            } 
+          }))
+        }, 100)
+      }
+      
       console.log('Completion toggled successfully')
     } catch (error) {
       console.error('Error toggling completion:', error)
@@ -482,8 +941,12 @@ export const useOptimizedCalendar = (userId: string, dateRange: { start: Date; e
   }, [userId, dateRange.start.getTime(), dateRange.end.getTime()])
 
   useEffect(() => {
+    console.log('DEBUG: useEffect for loadProgressData triggered, activities.length:', activities.length)
     if (activities.length > 0) {
+      console.log('DEBUG: Calling loadProgressData')
       loadProgressData()
+    } else {
+      console.log('DEBUG: No activities, skipping loadProgressData')
     }
   }, [activities.length])
 
@@ -516,6 +979,242 @@ export const useOptimizedCalendar = (userId: string, dateRange: { start: Date; e
 export const useGoalProgress = (userId: string, goalIds?: string[]) => {
   const [goalsProgress, setGoalsProgress] = useState<Record<string, GoalProgress>>({})
   const [isLoading, setIsLoading] = useState(true)
+
+  // Función para actualizar solo una meta específica
+  const updateSingleGoalProgress = useCallback(async (goalId: string) => {
+    if (!userId) return
+
+    console.log('DEBUG: Updating single goal progress for:', goalId)
+    
+    try {
+      const { data: goalInfo } = await supabase
+        .from('goals')
+        .select('description')
+        .eq('id', goalId)
+        .single()
+
+      // Calcular progreso simple basado en actividades totales vs completadas
+      console.log('DEBUG: Calculating simple goal progress for goal:', goalId)
+      
+      // Obtener mecanismos de esta meta
+      const { data: mechanisms, error: mechanismsError } = await supabase
+        .from('mechanisms')
+        .select('*')
+        .eq('goal_id', goalId)
+        .eq('user_id', userId)
+
+      if (mechanismsError) {
+        console.error('Error loading mechanisms for goal:', mechanismsError)
+        return
+      }
+
+      // Obtener fechas de generación para calcular el período
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('generation')
+        .eq('id', userId)
+        .single()
+
+      let mechanismStartDate = new Date()
+      let mechanismEndDate = new Date()
+
+      if (profile?.generation) {
+        const { data: generationData } = await supabase
+          .from('generations')
+          .select('pl1_training_date, pl3_training_date')
+          .eq('name', profile.generation)
+          .single()
+
+        if (generationData?.pl1_training_date && generationData?.pl3_training_date) {
+          const pl1Date = new Date(generationData.pl1_training_date)
+          const pl3Date = new Date(generationData.pl3_training_date)
+          
+          // Mecanismos empiezan 1 semana después de PL1
+          mechanismStartDate = new Date(pl1Date)
+          mechanismStartDate.setDate(mechanismStartDate.getDate() + 7)
+          
+          // Mecanismos terminan 1 semana antes de PL3
+          mechanismEndDate = new Date(pl3Date)
+          mechanismEndDate.setDate(mechanismEndDate.getDate() - 7)
+        }
+      }
+
+      // Calcular actividades totales esperadas para esta meta
+      let totalExpectedActivities = 0
+      let totalCompletedActivities = 0
+
+      for (const mechanism of mechanisms || []) {
+        // Calcular cuántas actividades se esperan para este mecanismo
+        const startDate = mechanism.start_date ? new Date(mechanism.start_date) : mechanismStartDate
+        const endDate = mechanism.end_date ? new Date(mechanism.end_date) : mechanismEndDate
+        
+        // Usar el período completo para el cálculo
+        const actualStartDate = startDate > mechanismStartDate ? startDate : mechanismStartDate
+        const actualEndDate = endDate < mechanismEndDate ? endDate : mechanismEndDate
+
+        let expectedCount = 0
+        const currentDate = new Date(actualStartDate)
+        
+        while (currentDate <= actualEndDate) {
+          const dayOfWeek = currentDate.getDay()
+          let shouldInclude = false
+
+          switch (mechanism.frequency) {
+            case 'daily':
+              shouldInclude = true
+              break
+            case 'weekly':
+              shouldInclude = dayOfWeek === 1 // Lunes
+              break
+            case '2x_week':
+              shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
+              break
+            case '3x_week':
+              shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
+              break
+            case '4x_week':
+              shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
+              break
+            case '5x_week':
+              shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
+              break
+            case 'biweekly':
+              const daysSincePeriodStart = Math.floor((currentDate.getTime() - actualStartDate.getTime()) / (1000 * 60 * 60 * 24))
+              shouldInclude = daysSincePeriodStart % 14 === 0
+              break
+          }
+
+          if (shouldInclude) {
+            expectedCount++
+          }
+
+          currentDate.setDate(currentDate.getDate() + 1)
+        }
+
+        totalExpectedActivities += expectedCount
+
+        // Contar actividades completadas para este mecanismo (usar período completo de la generación)
+        const { data: completions } = await supabase
+          .from('mechanism_completions')
+          .select('completed_date')
+          .eq('mechanism_id', mechanism.id)
+          .eq('user_id', userId)
+          .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
+          .lte('completed_date', format(mechanismEndDate, 'yyyy-MM-dd'))
+
+        console.log('DEBUG: Mechanism completions for', mechanism.id, ':', {
+          mechanismId: mechanism.id,
+          actualStartDate: format(actualStartDate, 'yyyy-MM-dd'),
+          mechanismEndDate: format(mechanismEndDate, 'yyyy-MM-dd'),
+          completions: completions?.length || 0,
+          completionDates: completions?.map(c => c.completed_date) || []
+        })
+
+        totalCompletedActivities += completions?.length || 0
+      }
+
+      const progressPercentage = totalExpectedActivities > 0 ? (totalCompletedActivities / totalExpectedActivities) * 100 : 0
+
+      // Calcular progreso esperado hasta hoy
+      const today = new Date()
+      today.setHours(23, 59, 59, 999) // Incluir todo el día de hoy
+      
+      let expectedUntilToday = 0
+      let completedUntilToday = 0
+
+      for (const mechanism of mechanisms || []) {
+        const startDate = mechanism.start_date ? new Date(mechanism.start_date) : mechanismStartDate
+        const endDate = mechanism.end_date ? new Date(mechanism.end_date) : mechanismEndDate
+        
+        const actualStartDate = startDate > mechanismStartDate ? startDate : mechanismStartDate
+        const actualEndDate = endDate < mechanismEndDate ? endDate : mechanismEndDate
+        const todayEndDate = today < actualEndDate ? today : actualEndDate
+
+        let expectedCountUntilToday = 0
+        const currentDate = new Date(actualStartDate)
+        
+        while (currentDate <= todayEndDate) {
+          const dayOfWeek = currentDate.getDay()
+          let shouldInclude = false
+
+          switch (mechanism.frequency) {
+            case 'daily':
+              shouldInclude = true
+              break
+            case 'weekly':
+              shouldInclude = dayOfWeek === 1 // Lunes
+              break
+            case '2x_week':
+              shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
+              break
+            case '3x_week':
+              shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
+              break
+            case '4x_week':
+              shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
+              break
+            case '5x_week':
+              shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
+              break
+            case 'biweekly':
+              const daysSincePeriodStart = Math.floor((currentDate.getTime() - actualStartDate.getTime()) / (1000 * 60 * 60 * 24))
+              shouldInclude = daysSincePeriodStart % 14 === 0
+              break
+          }
+
+          if (shouldInclude) {
+            expectedCountUntilToday++
+          }
+
+          currentDate.setDate(currentDate.getDate() + 1)
+        }
+
+        expectedUntilToday += expectedCountUntilToday
+
+        // Contar actividades completadas hasta hoy
+        const { data: completionsUntilToday } = await supabase
+          .from('mechanism_completions')
+          .select('completed_date')
+          .eq('mechanism_id', mechanism.id)
+          .eq('user_id', userId)
+          .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
+          .lte('completed_date', format(todayEndDate, 'yyyy-MM-dd'))
+
+        completedUntilToday += completionsUntilToday?.length || 0
+      }
+
+      const progressUntilToday = expectedUntilToday > 0 ? (completedUntilToday / expectedUntilToday) * 100 : 0
+
+      console.log('DEBUG: Single goal progress calculation:', {
+        goalId,
+        totalExpectedActivities,
+        totalCompletedActivities,
+        progressPercentage: Math.round(progressPercentage * 100) / 100,
+        expectedUntilToday,
+        completedUntilToday,
+        progressUntilToday: Math.round(progressUntilToday * 100) / 100
+      })
+
+      // Actualizar solo esta meta en el estado
+      setGoalsProgress(prev => ({
+        ...prev,
+        [goalId]: {
+          goalId,
+          goalDescription: goalInfo?.description || 'Meta sin nombre',
+          totalMechanisms: mechanisms?.length || 0,
+          activeMechanisms: mechanisms?.length || 0,
+          avgProgress: progressPercentage,
+          progressUntilToday: progressUntilToday,
+          mechanismsOnTrack: Math.round(progressPercentage / 100 * (mechanisms?.length || 0)),
+          goalCompletionPredictionDays: null,
+          lastActivityDate: null
+        }
+      }))
+
+    } catch (error) {
+      console.error('Error updating single goal progress:', error)
+    }
+  }, [userId])
 
   const loadGoalsProgress = useCallback(async () => {
     if (!userId) return
@@ -550,20 +1249,218 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
         try {
           const goalInfo = goalsData?.find(g => g.id === goalId)
           
-          let progressData, error
-          try {
-            const result = await supabase.rpc('calculate_goal_progress', {
-              p_goal_id: goalId,
-              p_user_id: userId
-            })
-            progressData = result.data
-            error = result.error
-          } catch (fallbackError) {
-            console.warn('Function calculate_goal_progress not found, using fallback:', fallbackError)
-            // Fallback: progreso básico
-            progressData = [{ total_mechanisms: 0, active_mechanisms: 0, avg_progress: 0, mechanisms_on_track: 0, goal_completion_prediction_days: null, last_activity_date: null }]
-            error = null
+          // Calcular progreso simple basado en actividades totales vs completadas
+          console.log('DEBUG: Calculating simple goal progress for goal:', goalId)
+          
+          // Obtener mecanismos de esta meta
+          const { data: mechanisms, error: mechanismsError } = await supabase
+            .from('mechanisms')
+            .select('*')
+            .eq('goal_id', goalId)
+            .eq('user_id', userId)
+
+          if (mechanismsError) {
+            console.error('Error loading mechanisms for goal:', mechanismsError)
+            return { goalId, goalDescription: goalInfo?.description || 'Meta sin nombre', progressData: null }
           }
+
+          // Obtener fechas de generación para calcular el período
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('generation')
+            .eq('id', userId)
+            .single()
+
+          let mechanismStartDate = new Date()
+          let mechanismEndDate = new Date()
+
+          if (profile?.generation) {
+            const { data: generationData } = await supabase
+              .from('generations')
+              .select('pl1_training_date, pl3_training_date')
+              .eq('name', profile.generation)
+              .single()
+
+            if (generationData?.pl1_training_date && generationData?.pl3_training_date) {
+              const pl1Date = new Date(generationData.pl1_training_date)
+              const pl3Date = new Date(generationData.pl3_training_date)
+              
+              // Mecanismos empiezan 1 semana después de PL1
+              mechanismStartDate = new Date(pl1Date)
+              mechanismStartDate.setDate(mechanismStartDate.getDate() + 7)
+              
+              // Mecanismos terminan 1 semana antes de PL3
+              mechanismEndDate = new Date(pl3Date)
+              mechanismEndDate.setDate(mechanismEndDate.getDate() - 7)
+            }
+          }
+
+          // Calcular actividades totales esperadas para esta meta
+          let totalExpectedActivities = 0
+          let totalCompletedActivities = 0
+
+          for (const mechanism of mechanisms || []) {
+            // Calcular cuántas actividades se esperan para este mecanismo
+            const startDate = mechanism.start_date ? new Date(mechanism.start_date) : mechanismStartDate
+            const endDate = mechanism.end_date ? new Date(mechanism.end_date) : mechanismEndDate
+            
+            // Usar el período completo para el cálculo
+            const actualStartDate = startDate > mechanismStartDate ? startDate : mechanismStartDate
+            const actualEndDate = endDate < mechanismEndDate ? endDate : mechanismEndDate
+
+            let expectedCount = 0
+            const currentDate = new Date(actualStartDate)
+            
+            while (currentDate <= actualEndDate) {
+              const dayOfWeek = currentDate.getDay()
+              let shouldInclude = false
+
+              switch (mechanism.frequency) {
+                case 'daily':
+                  shouldInclude = true
+                  break
+                case 'weekly':
+                  shouldInclude = dayOfWeek === 1 // Lunes
+                  break
+                case '2x_week':
+                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
+                  break
+                case '3x_week':
+                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
+                  break
+                case '4x_week':
+                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
+                  break
+                case '5x_week':
+                  shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
+                  break
+                case 'biweekly':
+                  const daysSincePeriodStart = Math.floor((currentDate.getTime() - actualStartDate.getTime()) / (1000 * 60 * 60 * 24))
+                  shouldInclude = daysSincePeriodStart % 14 === 0
+                  break
+              }
+
+              if (shouldInclude) {
+                expectedCount++
+              }
+
+              currentDate.setDate(currentDate.getDate() + 1)
+            }
+
+            totalExpectedActivities += expectedCount
+
+            // Contar actividades completadas para este mecanismo (usar período completo de la generación)
+            const { data: completions } = await supabase
+              .from('mechanism_completions')
+              .select('completed_date')
+              .eq('mechanism_id', mechanism.id)
+              .eq('user_id', userId)
+              .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
+              .lte('completed_date', format(mechanismEndDate, 'yyyy-MM-dd'))
+
+            console.log('DEBUG: LoadGoalsProgress - Mechanism completions for', mechanism.id, ':', {
+              mechanismId: mechanism.id,
+              actualStartDate: format(actualStartDate, 'yyyy-MM-dd'),
+              mechanismEndDate: format(mechanismEndDate, 'yyyy-MM-dd'),
+              completions: completions?.length || 0,
+              completionDates: completions?.map(c => c.completed_date) || []
+            })
+
+            totalCompletedActivities += completions?.length || 0
+          }
+
+          const progressPercentage = totalExpectedActivities > 0 ? (totalCompletedActivities / totalExpectedActivities) * 100 : 0
+
+          // Calcular progreso esperado hasta hoy
+          const today = new Date()
+          today.setHours(23, 59, 59, 999) // Incluir todo el día de hoy
+          
+          let expectedUntilToday = 0
+          let completedUntilToday = 0
+
+          for (const mechanism of mechanisms || []) {
+            const startDate = mechanism.start_date ? new Date(mechanism.start_date) : mechanismStartDate
+            const endDate = mechanism.end_date ? new Date(mechanism.end_date) : mechanismEndDate
+            
+            const actualStartDate = startDate > mechanismStartDate ? startDate : mechanismStartDate
+            const actualEndDate = endDate < mechanismEndDate ? endDate : mechanismEndDate
+            const todayEndDate = today < actualEndDate ? today : actualEndDate
+
+            let expectedCountUntilToday = 0
+            const currentDate = new Date(actualStartDate)
+            
+            while (currentDate <= todayEndDate) {
+              const dayOfWeek = currentDate.getDay()
+              let shouldInclude = false
+
+              switch (mechanism.frequency) {
+                case 'daily':
+                  shouldInclude = true
+                  break
+                case 'weekly':
+                  shouldInclude = dayOfWeek === 1 // Lunes
+                  break
+                case '2x_week':
+                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
+                  break
+                case '3x_week':
+                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
+                  break
+                case '4x_week':
+                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
+                  break
+                case '5x_week':
+                  shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
+                  break
+                case 'biweekly':
+                  const daysSincePeriodStart = Math.floor((currentDate.getTime() - actualStartDate.getTime()) / (1000 * 60 * 60 * 24))
+                  shouldInclude = daysSincePeriodStart % 14 === 0
+                  break
+              }
+
+              if (shouldInclude) {
+                expectedCountUntilToday++
+              }
+
+              currentDate.setDate(currentDate.getDate() + 1)
+            }
+
+            expectedUntilToday += expectedCountUntilToday
+
+            // Contar actividades completadas hasta hoy
+            const { data: completionsUntilToday } = await supabase
+              .from('mechanism_completions')
+              .select('completed_date')
+              .eq('mechanism_id', mechanism.id)
+              .eq('user_id', userId)
+              .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
+              .lte('completed_date', format(todayEndDate, 'yyyy-MM-dd'))
+
+            completedUntilToday += completionsUntilToday?.length || 0
+          }
+
+          const progressUntilToday = expectedUntilToday > 0 ? (completedUntilToday / expectedUntilToday) * 100 : 0
+
+          console.log('DEBUG: Simple goal progress calculation:', {
+            goalId,
+            totalExpectedActivities,
+            totalCompletedActivities,
+            progressPercentage: Math.round(progressPercentage * 100) / 100,
+            expectedUntilToday,
+            completedUntilToday,
+            progressUntilToday: Math.round(progressUntilToday * 100) / 100
+          })
+
+          const progressData = [{
+            total_mechanisms: mechanisms?.length || 0,
+            active_mechanisms: mechanisms?.length || 0,
+            avg_progress: progressPercentage,
+            progress_until_today: progressUntilToday,
+            mechanisms_on_track: Math.round(progressPercentage / 100 * (mechanisms?.length || 0)),
+            goal_completion_prediction_days: null,
+            last_activity_date: null
+          }]
+          const error = null
 
           if (error) {
             console.error('Error calculating goal progress:', error)
@@ -592,6 +1489,7 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
             totalMechanisms: progressData.total_mechanisms,
             activeMechanisms: progressData.active_mechanisms,
             avgProgress: progressData.avg_progress,
+            progressUntilToday: progressData.progress_until_today,
             mechanismsOnTrack: progressData.mechanisms_on_track,
             goalCompletionPredictionDays: progressData.goal_completion_prediction_days,
             lastActivityDate: progressData.last_activity_date ? new Date(progressData.last_activity_date) : null
@@ -617,6 +1515,7 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
   return {
     goalsProgress,
     isLoading,
-    refreshProgress: loadGoalsProgress
+    refreshProgress: loadGoalsProgress,
+    updateSingleGoalProgress
   }
 }

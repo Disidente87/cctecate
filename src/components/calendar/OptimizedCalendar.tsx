@@ -4,7 +4,7 @@ import React from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, DragOverlay, closestCenter, useDraggable, useDroppable } from '@dnd-kit/core'
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { useOptimizedCalendar } from '@/hooks/useOptimizedCalendar'
+import { useOptimizedCalendar, useGoalProgress } from '@/hooks/useOptimizedCalendar'
 
 interface CalendarActivity {
   id: string
@@ -51,7 +51,6 @@ const getGoalColor = (goalId: string): string => {
 
 interface CalendarActivityCardProps {
   activity: CalendarActivity
-  progress?: MechanismProgress
   isPending?: boolean
   onToggleCompletion: (activityId: string, date: Date) => void
 }
@@ -100,7 +99,6 @@ const DroppableDayCell: React.FC<DroppableDayCellProps> = ({
           <DraggableActivityCard
             key={activity.id}
             activity={activity}
-            progress={progressData[activity.mechanismId]}
             isPending={pendingUpdates.has(activity.id)}
             onToggleCompletion={onToggleCompletion}
           />
@@ -112,7 +110,6 @@ const DroppableDayCell: React.FC<DroppableDayCellProps> = ({
 
 const DraggableActivityCard: React.FC<CalendarActivityCardProps> = ({
   activity,
-  progress,
   isPending,
   onToggleCompletion
 }) => {
@@ -128,7 +125,6 @@ const DraggableActivityCard: React.FC<CalendarActivityCardProps> = ({
     transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
   } : undefined
 
-  const progressPercentage = progress?.progressPercentage || 0
   const goalColor = getGoalColor(activity.goalId)
   
   return (
@@ -136,7 +132,7 @@ const DraggableActivityCard: React.FC<CalendarActivityCardProps> = ({
       ref={setNodeRef}
       style={style}
       className={`
-        p-2 rounded-lg border cursor-grab transition-all duration-200 text-sm
+        p-2 rounded-lg border transition-all duration-200 text-sm relative group
         ${activity.isCompleted 
           ? 'bg-green-50 border-green-300 text-green-800' 
           : goalColor
@@ -144,53 +140,84 @@ const DraggableActivityCard: React.FC<CalendarActivityCardProps> = ({
         ${activity.isException ? 'border-l-4 border-l-blue-500' : ''}
         ${isPending ? 'opacity-50 animate-pulse' : ''}
         ${isDragging ? 'opacity-50 shadow-2xl scale-105 rotate-2 z-50' : 'hover:shadow-md hover:scale-105'}
-        active:cursor-grabbing
       `}
-      onClick={() => onToggleCompletion(activity.id, activity.date)}
-      {...attributes}
-      {...listeners}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <div className={`w-2 h-2 rounded-full ${activity.isCompleted ? 'bg-green-500' : 'bg-current'}`}></div>
-            <span className="text-xs font-medium opacity-75">{activity.goalDescription}</span>
-          </div>
-          <span className={`font-medium ${activity.isCompleted ? 'line-through' : ''}`}>
-            {activity.mechanismDescription}
-          </span>
-        </div>
-        {activity.isCompleted && (
-          <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center ml-2">
-            <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+      {/* Área de insensibilidad para bloquear drag & drop */}
+      <div
+        className="absolute top-1.5 right-1.5 w-10 h-10 z-20"
+        onMouseDown={(e) => {
+          e.stopPropagation()
+        }}
+        onClick={(e) => {
+          e.stopPropagation()
+        }}
+      >
+        {/* Botón de completar - solo el icono activa la función */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            onToggleCompletion(activity.id, activity.date)
+          }}
+          onMouseDown={(e) => {
+            e.stopPropagation()
+          }}
+          className={`
+            absolute top-1 right-1 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200
+            ${activity.isCompleted 
+              ? 'bg-green-500 border-green-500 text-white' 
+              : 'bg-white border-gray-300 text-gray-400 hover:border-green-400 hover:text-green-500'
+            }
+            ${isDragging ? 'hidden' : 'group-hover:opacity-100 opacity-70'}
+          `}
+          title={activity.isCompleted ? 'Marcar como no completada' : 'Marcar como completada'}
+        >
+          {activity.isCompleted ? (
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
             </svg>
-          </div>
-        )}
+          ) : (
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </button>
       </div>
-      
-      {progress && (
-        <div className="mt-2 space-y-1">
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
-            <div 
-              className="bg-blue-500 h-1.5 rounded-full transition-all"
-              style={{ width: `${Math.min(100, progressPercentage)}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-xs text-gray-600">
-            <span>{Math.round(progressPercentage)}%</span>
-            <span>
-              {progress.currentStreak > 0 && `🔥 ${progress.currentStreak}`}
+
+      {/* Área draggable - excluyendo el botón */}
+      <div
+        className="cursor-grab active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+
+        <div className="flex items-start justify-between pr-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <div className={`w-2 h-2 rounded-full ${activity.isCompleted ? 'bg-green-500' : 'bg-current'}`}></div>
+              <span className="text-xs font-medium opacity-75">{activity.goalDescription}</span>
+            </div>
+            <span className={`font-medium ${activity.isCompleted ? 'line-through' : ''}`}>
+              {activity.mechanismDescription}
             </span>
           </div>
         </div>
-      )}
-      
-      {activity.isException && (
-        <div className="mt-1 text-xs text-blue-600">
-          📅 Reprogramada
+        
+        
+        {/* Indicadores de estado */}
+        <div className="mt-2 flex items-center justify-between text-xs">
+          {activity.isException && (
+            <span className="text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+              📅 Reprogramada
+            </span>
+          )}
+          {activity.isCompleted && (
+            <span className="text-green-600 bg-green-100 px-2 py-1 rounded-full font-medium">
+              ✅ Completado
+            </span>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -216,6 +243,20 @@ export const OptimizedCalendar: React.FC<OptimizedCalendarProps> = ({
     moveActivity,
     toggleCompletion
   } = useOptimizedCalendar(userId, { start: weekStart, end: weekEnd })
+
+  // Obtener IDs de metas únicas de las actividades
+  const goalIds = React.useMemo(() => {
+    const uniqueGoalIds = new Set<string>()
+    Object.values(activitiesByDate).forEach(activities => {
+      activities.forEach(activity => {
+        uniqueGoalIds.add(activity.goalId)
+      })
+    })
+    return Array.from(uniqueGoalIds)
+  }, [activitiesByDate])
+
+  // Calcular progreso de metas
+  const { goalsProgress, isLoading: goalsLoading, refreshProgress } = useGoalProgress(userId, goalIds)
 
   const [activeId, setActiveId] = React.useState<string | null>(null)
   const [draggedActivity, setDraggedActivity] = React.useState<CalendarActivity | null>(null)
@@ -282,8 +323,12 @@ export const OptimizedCalendar: React.FC<OptimizedCalendarProps> = ({
       return
     }
 
-    // Actualizar la fecha de la actividad
-    console.log('Moving activity:', {
+    // Siempre llamar a moveActivity, incluso si es el mismo día
+    // La función moveActivity manejará la lógica de regreso al día original
+    const originalDate = draggedActivity.originalDate
+
+    // Actualizar la fecha de la actividad solo si es un día diferente
+    console.log('Moving activity to different day:', {
       activityId: draggedActivity.id,
       newDate: newDate.toISOString(),
       originalDate: draggedActivity.originalDate?.toISOString()
@@ -355,7 +400,6 @@ export const OptimizedCalendar: React.FC<OptimizedCalendarProps> = ({
           <div className="transform rotate-3 scale-105 shadow-2xl opacity-90">
             <DraggableActivityCard
               activity={draggedActivity}
-              progress={progressData[draggedActivity.mechanismId]}
               onToggleCompletion={() => {}}
             />
           </div>

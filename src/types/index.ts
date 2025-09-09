@@ -34,8 +34,10 @@ export interface Mechanism {
   id: string
   goal_id: string
   description: string
-  completed: boolean
-  due_date: string
+  frequency: 'daily' | '2x_week' | '3x_week' | '4x_week' | '5x_week' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'
+  user_id: string
+  start_date?: string | null
+  end_date?: string | null
   created_at: string
   updated_at: string
 }
