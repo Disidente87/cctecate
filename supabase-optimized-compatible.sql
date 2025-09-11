@@ -90,16 +90,21 @@ CREATE TABLE activities (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabla de llamadas (MANTENER ESTRUCTURA EXISTENTE)
+-- Tabla de llamadas (OPTIMIZADA PARA CALENDARIO Y CALIFICACIONES)
 CREATE TABLE calls (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   leader_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   senior_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   scheduled_date TIMESTAMP WITH TIME ZONE NOT NULL,
   status TEXT CHECK (status IN ('scheduled', 'completed', 'rescheduled', 'missed')) DEFAULT 'scheduled',
+  -- Nuevos campos para calificaciones
+  evaluation_status TEXT CHECK (evaluation_status IN ('pending', 'on_time', 'late', 'rescheduled', 'not_done')) DEFAULT 'pending',
   score DECIMAL(2,1) DEFAULT 0 CHECK (score >= 0 AND score <= 3),
   notes TEXT,
   rescheduled_count INTEGER DEFAULT 0,
+  -- Campos para programación automática
+  call_schedule_id UUID REFERENCES call_schedules(id), -- Referencia a la programación base
+  is_auto_generated BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -142,6 +147,25 @@ CREATE TABLE mechanism_completions (
   UNIQUE(mechanism_id, user_id, completed_date)
 );
 
+-- Tabla de programación de llamadas (NUEVA)
+CREATE TABLE call_schedules (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  leader_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  senior_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  -- Horarios de llamadas (3 días por semana: Lunes, Miércoles, Viernes)
+  monday_time TIME,
+  wednesday_time TIME,
+  friday_time TIME,
+  -- Período de llamadas
+  start_date DATE NOT NULL, -- PL1 + 3 días
+  end_date DATE NOT NULL,   -- PL3 - 1 semana
+  -- Estado de la programación
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(leader_id, senior_id)
+);
+
 -- =====================================================
 -- ÍNDICES PARA PERFORMANCE
 -- =====================================================
@@ -169,6 +193,16 @@ CREATE INDEX idx_mechanism_exceptions_user ON mechanism_schedule_exceptions (use
 CREATE INDEX idx_mechanism_exceptions_date ON mechanism_schedule_exceptions (moved_to_date) WHERE moved_to_date IS NOT NULL;
 CREATE INDEX idx_mechanism_completions_calc ON mechanism_completions (mechanism_id, user_id, completed_date);
 CREATE INDEX idx_mechanism_completions_date ON mechanism_completions (user_id, completed_date DESC);
+
+-- Índices optimizados para llamadas (NUEVOS)
+CREATE INDEX idx_calls_evaluation_status ON calls (evaluation_status);
+CREATE INDEX idx_calls_schedule_id ON calls (call_schedule_id);
+CREATE INDEX idx_calls_auto_generated ON calls (is_auto_generated);
+CREATE INDEX idx_calls_leader_scheduled ON calls (leader_id, scheduled_date);
+CREATE INDEX idx_calls_pending_evaluation ON calls (leader_id, evaluation_status) WHERE evaluation_status = 'pending';
+CREATE INDEX idx_call_schedules_leader ON call_schedules (leader_id);
+CREATE INDEX idx_call_schedules_senior ON call_schedules (senior_id);
+CREATE INDEX idx_call_schedules_active ON call_schedules (is_active) WHERE is_active = true;
 
 -- =====================================================
 -- FUNCIONES Y TRIGGERS (MANTENER EXISTENTES + NUEVAS)
@@ -201,6 +235,9 @@ CREATE TRIGGER update_calls_updated_at BEFORE UPDATE ON calls
 
 -- Triggers para nuevas tablas
 CREATE TRIGGER update_mechanism_schedule_exceptions_updated_at BEFORE UPDATE ON mechanism_schedule_exceptions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_call_schedules_updated_at BEFORE UPDATE ON call_schedules
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Trigger para calcular automáticamente start_date y end_date de mecanismos
@@ -675,6 +712,347 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- =====================================================
+-- FUNCIONES OPTIMIZADAS PARA SISTEMA DE LLAMADAS
+-- =====================================================
+
+-- Función para crear programación de llamadas automática
+CREATE OR REPLACE FUNCTION create_call_schedule(
+  p_leader_id UUID,
+  p_senior_id UUID,
+  p_monday_time TIME,
+  p_wednesday_time TIME,
+  p_friday_time TIME
+)
+RETURNS UUID AS $$
+DECLARE
+  v_schedule_id UUID;
+  v_leader_generation TEXT;
+  v_pl1_date TIMESTAMP WITH TIME ZONE;
+  v_pl3_date TIMESTAMP WITH TIME ZONE;
+  v_start_date DATE;
+  v_end_date DATE;
+BEGIN
+  -- Obtener la generación del líder
+  SELECT generation INTO v_leader_generation
+  FROM profiles 
+  WHERE id = p_leader_id;
+  
+  IF v_leader_generation IS NULL THEN
+    RAISE EXCEPTION 'Líder no encontrado o sin generación asignada';
+  END IF;
+  
+  -- Obtener fechas PL1 y PL3 de la generación
+  SELECT pl1_training_date, pl3_training_date 
+  INTO v_pl1_date, v_pl3_date
+  FROM generations 
+  WHERE name = v_leader_generation;
+  
+  IF v_pl1_date IS NULL OR v_pl3_date IS NULL THEN
+    RAISE EXCEPTION 'Fechas PL1 o PL3 no definidas para la generación %', v_leader_generation;
+  END IF;
+  
+  -- Calcular fechas de inicio y fin
+  v_start_date := (v_pl1_date + INTERVAL '2 days')::DATE;
+  v_end_date := (v_pl3_date - INTERVAL '5 days')::DATE;
+  
+  -- Crear la programación
+  INSERT INTO call_schedules (
+    leader_id, 
+    senior_id, 
+    monday_time, 
+    wednesday_time, 
+    friday_time, 
+    start_date, 
+    end_date
+  ) VALUES (
+    p_leader_id, 
+    p_senior_id, 
+    p_monday_time,
+    p_wednesday_time,
+    p_friday_time,
+    v_start_date, 
+    v_end_date
+  ) RETURNING id INTO v_schedule_id;
+  
+  -- Generar todas las llamadas automáticamente
+  PERFORM generate_calls_from_schedule(v_schedule_id);
+  
+  RETURN v_schedule_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para generar llamadas desde una programación
+CREATE OR REPLACE FUNCTION generate_calls_from_schedule(p_schedule_id UUID)
+RETURNS INTEGER AS $$
+DECLARE
+  v_schedule RECORD;
+  v_current_date DATE;
+  v_call_count INTEGER := 0;
+  v_scheduled_datetime TIMESTAMP WITH TIME ZONE;
+BEGIN
+  -- Obtener información de la programación
+  SELECT * INTO v_schedule
+  FROM call_schedules 
+  WHERE id = p_schedule_id;
+  
+  IF v_schedule IS NULL THEN
+    RAISE EXCEPTION 'Programación no encontrada';
+  END IF;
+  
+  -- Iterar por todas las fechas en el rango
+  v_current_date := v_schedule.start_date;
+  
+  WHILE v_current_date <= v_schedule.end_date LOOP
+    -- Lunes
+    IF v_schedule.monday_time IS NOT NULL AND EXTRACT(DOW FROM v_current_date) = 1 THEN
+      -- Combinar la fecha con la hora (se guarda en UTC)
+      v_scheduled_datetime := (v_current_date + v_schedule.monday_time)::TIMESTAMP WITH TIME ZONE;
+      INSERT INTO calls (leader_id, senior_id, scheduled_date, call_schedule_id, is_auto_generated)
+      VALUES (v_schedule.leader_id, v_schedule.senior_id, v_scheduled_datetime, p_schedule_id, TRUE)
+      ON CONFLICT DO NOTHING;
+      v_call_count := v_call_count + 1;
+    END IF;
+    
+    -- Miércoles
+    IF v_schedule.wednesday_time IS NOT NULL AND EXTRACT(DOW FROM v_current_date) = 3 THEN
+      -- Combinar la fecha con la hora (se guarda en UTC)
+      v_scheduled_datetime := (v_current_date + v_schedule.wednesday_time)::TIMESTAMP WITH TIME ZONE;
+      INSERT INTO calls (leader_id, senior_id, scheduled_date, call_schedule_id, is_auto_generated)
+      VALUES (v_schedule.leader_id, v_schedule.senior_id, v_scheduled_datetime, p_schedule_id, TRUE)
+      ON CONFLICT DO NOTHING;
+      v_call_count := v_call_count + 1;
+    END IF;
+    
+    -- Viernes
+    IF v_schedule.friday_time IS NOT NULL AND EXTRACT(DOW FROM v_current_date) = 5 THEN
+      -- Combinar la fecha con la hora (se guarda en UTC)
+      v_scheduled_datetime := (v_current_date + v_schedule.friday_time)::TIMESTAMP WITH TIME ZONE;
+      INSERT INTO calls (leader_id, senior_id, scheduled_date, call_schedule_id, is_auto_generated)
+      VALUES (v_schedule.leader_id, v_schedule.senior_id, v_scheduled_datetime, p_schedule_id, TRUE)
+      ON CONFLICT DO NOTHING;
+      v_call_count := v_call_count + 1;
+    END IF;
+    
+    v_current_date := v_current_date + INTERVAL '1 day';
+  END LOOP;
+  
+  RETURN v_call_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para evaluar una llamada
+CREATE OR REPLACE FUNCTION evaluate_call(
+  p_call_id UUID,
+  p_evaluation_status TEXT,
+  p_score DECIMAL(2,1) DEFAULT NULL,
+  p_notes TEXT DEFAULT NULL
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+  v_call RECORD;
+  v_calculated_score DECIMAL(2,1);
+BEGIN
+  -- Obtener información de la llamada
+  SELECT * INTO v_call
+  FROM calls 
+  WHERE id = p_call_id;
+  
+  IF v_call IS NULL THEN
+    RAISE EXCEPTION 'Llamada no encontrada';
+  END IF;
+  
+  -- Calcular score automáticamente si no se proporciona
+  IF p_score IS NULL THEN
+    CASE p_evaluation_status
+      WHEN 'on_time' THEN v_calculated_score := 3.0;
+      WHEN 'late' THEN v_calculated_score := 2.0;
+      WHEN 'rescheduled' THEN v_calculated_score := 1.0;
+      WHEN 'not_done' THEN v_calculated_score := 0.0;
+      ELSE v_calculated_score := 0.0;
+    END CASE;
+  ELSE
+    v_calculated_score := p_score;
+  END IF;
+  
+  -- Actualizar la llamada
+  UPDATE calls 
+  SET 
+    evaluation_status = p_evaluation_status,
+    score = v_calculated_score,
+    notes = COALESCE(p_notes, notes),
+    status = CASE 
+      WHEN p_evaluation_status IN ('on_time', 'late', 'rescheduled') THEN 'completed'
+      WHEN p_evaluation_status = 'not_done' THEN 'missed'
+      ELSE status
+    END,
+    updated_at = NOW()
+  WHERE id = p_call_id;
+  
+  RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para obtener estadísticas de llamadas
+CREATE OR REPLACE FUNCTION get_call_statistics(p_leader_id UUID)
+RETURNS TABLE (
+  total_calls INTEGER,
+  completed_calls INTEGER,
+  pending_calls INTEGER,
+  total_score DECIMAL(5,1),
+  progress_percentage DECIMAL(5,2),
+  available_percentage DECIMAL(5,2),
+  on_time_calls INTEGER,
+  late_calls INTEGER,
+  rescheduled_calls INTEGER,
+  not_done_calls INTEGER
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    COUNT(*)::INTEGER as total_calls,
+    COUNT(CASE WHEN evaluation_status != 'pending' THEN 1 END)::INTEGER as completed_calls,
+    COUNT(CASE WHEN evaluation_status = 'pending' THEN 1 END)::INTEGER as pending_calls,
+    COALESCE(SUM(score), 0)::DECIMAL(5,1) as total_score,
+    CASE 
+      WHEN COUNT(*) = 0 THEN 0
+      ELSE ROUND((COUNT(CASE WHEN evaluation_status = 'on_time' THEN 1 END)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+    END::DECIMAL(5,2) as progress_percentage,
+    CASE 
+      WHEN COUNT(*) = 0 THEN 0
+      ELSE ROUND((COUNT(CASE WHEN evaluation_status != 'pending' THEN 1 END)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+    END::DECIMAL(5,2) as available_percentage,
+    COUNT(CASE WHEN evaluation_status = 'on_time' THEN 1 END)::INTEGER as on_time_calls,
+    COUNT(CASE WHEN evaluation_status = 'late' THEN 1 END)::INTEGER as late_calls,
+    COUNT(CASE WHEN evaluation_status = 'rescheduled' THEN 1 END)::INTEGER as rescheduled_calls,
+    COUNT(CASE WHEN evaluation_status = 'not_done' THEN 1 END)::INTEGER as not_done_calls
+  FROM calls 
+  WHERE leader_id = p_leader_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para obtener la próxima llamada
+CREATE OR REPLACE FUNCTION get_next_call(p_leader_id UUID)
+RETURNS TABLE (
+  call_id UUID,
+  scheduled_date TIMESTAMP WITH TIME ZONE,
+  senior_name TEXT,
+  senior_email TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    c.id as call_id,
+    c.scheduled_date,
+    p.name as senior_name,
+    p.email as senior_email
+  FROM calls c
+  JOIN profiles p ON p.id = c.senior_id
+  WHERE c.leader_id = p_leader_id
+    AND c.evaluation_status = 'pending'
+    AND c.scheduled_date > NOW()
+  ORDER BY c.scheduled_date ASC
+  LIMIT 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para generar vista del calendario de llamadas
+CREATE OR REPLACE FUNCTION get_calls_calendar_view(
+  p_leader_id UUID,
+  p_start_date DATE,
+  p_end_date DATE
+)
+RETURNS TABLE (
+  date DATE,
+  call_id UUID,
+  scheduled_time TIMESTAMP WITH TIME ZONE,
+  senior_name TEXT,
+  evaluation_status TEXT,
+  score DECIMAL(2,1),
+  color_code TEXT,
+  is_pending BOOLEAN,
+  is_future BOOLEAN
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    c.scheduled_date::DATE as date,
+    c.id as call_id,
+    c.scheduled_date as scheduled_time,
+    p.name as senior_name,
+    c.evaluation_status,
+    c.score,
+    -- Códigos de color según el estado
+    CASE 
+      WHEN c.evaluation_status = 'on_time' THEN 'green'
+      WHEN c.evaluation_status = 'late' THEN 'yellow'
+      WHEN c.evaluation_status = 'rescheduled' THEN 'yellow'
+      WHEN c.evaluation_status = 'not_done' THEN 'red'
+      WHEN c.evaluation_status = 'pending' AND c.scheduled_date::DATE > CURRENT_DATE THEN 'gray'
+      WHEN c.evaluation_status = 'pending' AND c.scheduled_date::DATE <= CURRENT_DATE THEN 'blue'
+      ELSE 'gray'
+    END as color_code,
+    (c.evaluation_status = 'pending') as is_pending,
+    (c.scheduled_date::DATE > CURRENT_DATE) as is_future
+  FROM calls c
+  JOIN profiles p ON p.id = c.senior_id
+  WHERE c.leader_id = p_leader_id
+    AND c.scheduled_date::DATE BETWEEN p_start_date AND p_end_date
+  ORDER BY c.scheduled_date;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para obtener llamadas pendientes de evaluación
+CREATE OR REPLACE FUNCTION get_pending_calls(p_leader_id UUID)
+RETURNS TABLE (
+  call_id UUID,
+  scheduled_date TIMESTAMP WITH TIME ZONE,
+  senior_name TEXT,
+  senior_email TEXT,
+  days_since_scheduled INTEGER,
+  is_overdue BOOLEAN
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    c.id as call_id,
+    c.scheduled_date,
+    p.name as senior_name,
+    p.email as senior_email,
+    (CURRENT_DATE - c.scheduled_date::DATE) as days_since_scheduled,
+    (c.scheduled_date::DATE < CURRENT_DATE) as is_overdue
+  FROM calls c
+  JOIN profiles p ON p.id = c.senior_id
+  WHERE c.leader_id = p_leader_id
+    AND c.evaluation_status = 'pending'
+    AND c.scheduled_date::DATE <= CURRENT_DATE
+  ORDER BY c.scheduled_date ASC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para obtener perfiles de seniors (sin problemas de RLS)
+CREATE OR REPLACE FUNCTION get_senior_profiles()
+RETURNS TABLE (
+    id UUID,
+    name TEXT,
+    email TEXT,
+    role TEXT,
+    generation TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        p.id,
+        p.name,
+        p.email,
+        p.role,
+        p.generation
+    FROM profiles p
+    WHERE p.role = 'senior'
+    ORDER BY p.name ASC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =====================================================
 -- ROW LEVEL SECURITY (RLS) - POLÍTICAS COMPLETAS
 -- =====================================================
 
@@ -688,6 +1066,7 @@ ALTER TABLE calls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_activity_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mechanism_schedule_exceptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mechanism_completions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE call_schedules ENABLE ROW LEVEL SECURITY;
 
 -- Políticas básicas para profiles (MANTENER)
 CREATE POLICY "Users can view own profile" ON profiles
@@ -695,6 +1074,40 @@ CREATE POLICY "Users can view own profile" ON profiles
 
 CREATE POLICY "Users can update own profile" ON profiles
     FOR UPDATE USING (auth.uid() = id);
+
+-- Política para que los líderes puedan ver los perfiles de seniors
+-- Usar una función auxiliar para evitar recursión
+CREATE OR REPLACE FUNCTION is_user_leader()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = auth.uid() 
+    AND role = 'lider'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE POLICY "Leaders can view senior profiles" ON profiles
+    FOR SELECT USING (
+        role = 'senior' AND is_user_leader()
+    );
+
+-- Función auxiliar para verificar si el usuario es admin
+CREATE OR REPLACE FUNCTION is_user_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = auth.uid() 
+    AND role = 'admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Política para que los admins puedan ver todos los perfiles
+CREATE POLICY "Admins can view all profiles" ON profiles
+    FOR SELECT USING (is_user_admin());
 
 -- Políticas básicas para goals (MANTENER)
 CREATE POLICY "Users can view own goals" ON goals
@@ -781,6 +1194,10 @@ CREATE POLICY "Users can manage own exceptions" ON mechanism_schedule_exceptions
 CREATE POLICY "Users can manage own completions" ON mechanism_completions 
   FOR ALL USING (auth.uid() = user_id);
 
+-- Políticas para call_schedules
+CREATE POLICY "Users can manage own call schedules" ON call_schedules 
+  FOR ALL USING (auth.uid() = leader_id OR auth.uid() = senior_id);
+
 -- =====================================================
 -- DATOS INICIALES (MANTENER EXISTENTES)
 -- =====================================================
@@ -832,6 +1249,7 @@ COMMENT ON TABLE calls IS 'Llamadas de seguimiento entre líderes y seniors';
 COMMENT ON TABLE user_activity_completions IS 'Registro de actividades completadas por usuario';
 COMMENT ON TABLE mechanism_schedule_exceptions IS 'Excepciones a las reglas de recurrencia (movimientos, cancelaciones)';
 COMMENT ON TABLE mechanism_completions IS 'Registro de completions reales de mecanismos';
+COMMENT ON TABLE call_schedules IS 'Programación automática de llamadas (L, M, V) entre líderes y seniors';
 
 -- Comentarios en las columnas importantes
 COMMENT ON COLUMN profiles.role IS 'Rol del usuario: lider, senior, admin';
@@ -845,6 +1263,12 @@ COMMENT ON COLUMN mechanisms.user_id IS 'ID del usuario propietario del mecanism
 COMMENT ON COLUMN mechanisms.start_date IS 'Fecha de inicio del mecanismo (para lógica de recurrencia)';
 COMMENT ON COLUMN mechanisms.end_date IS 'Fecha de fin del mecanismo (NULL = indefinido)';
 COMMENT ON COLUMN calls.score IS 'Puntuación de la llamada: 0-3 puntos';
+COMMENT ON COLUMN calls.evaluation_status IS 'Estado de evaluación: pending, on_time, late, rescheduled, not_done';
+COMMENT ON COLUMN calls.call_schedule_id IS 'Referencia a la programación base de llamadas';
+COMMENT ON COLUMN calls.is_auto_generated IS 'Indica si la llamada fue generada automáticamente';
+COMMENT ON COLUMN call_schedules.monday_time IS 'Hora de llamadas los lunes';
+COMMENT ON COLUMN call_schedules.wednesday_time IS 'Hora de llamadas los miércoles';
+COMMENT ON COLUMN call_schedules.friday_time IS 'Hora de llamadas los viernes';
 COMMENT ON COLUMN activities.unlock_date IS 'Fecha en que se desbloquea la actividad';
 COMMENT ON COLUMN activities.completed_by IS 'Array de IDs de usuarios que completaron la actividad';
 
@@ -852,8 +1276,15 @@ COMMENT ON COLUMN activities.completed_by IS 'Array de IDs de usuarios que compl
 COMMENT ON FUNCTION calculate_mechanism_progress IS 'Calcula progreso de un mecanismo específico';
 COMMENT ON FUNCTION calculate_goal_progress IS 'Calcula progreso agregado de una meta';
 COMMENT ON FUNCTION get_user_calendar_view IS 'Genera vista del calendario con fechas dinámicas y excepciones';
+COMMENT ON FUNCTION create_call_schedule IS 'Crea programación automática de llamadas para un líder';
+COMMENT ON FUNCTION generate_calls_from_schedule IS 'Genera todas las llamadas desde una programación';
+COMMENT ON FUNCTION evaluate_call IS 'Evalúa una llamada con calificación y estado';
+COMMENT ON FUNCTION get_call_statistics IS 'Obtiene estadísticas de llamadas para un líder';
+COMMENT ON FUNCTION get_next_call IS 'Obtiene la próxima llamada pendiente de un líder';
+COMMENT ON FUNCTION get_calls_calendar_view IS 'Genera vista del calendario de llamadas con colores por estado';
+COMMENT ON FUNCTION get_pending_calls IS 'Obtiene llamadas pendientes de evaluación';
 
 -- =====================================================
 -- MENSAJE DE CONFIRMACIÓN
 -- =====================================================
-SELECT 'Base de datos CC Tecate optimizada y compatible creada exitosamente!' as status;
+SELECT 'Base de datos CC Tecate optimizada y compatible creada exitosamente! Incluye sistema de llamadas automático.' as status;

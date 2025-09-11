@@ -5,456 +5,365 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { 
   Phone, 
-  Calendar, 
+  Calendar,
   Clock, 
   CheckCircle, 
-  XCircle,
   AlertCircle,
-  Plus,
-  Star
+  Star,
+  Settings
 } from 'lucide-react'
-import { format, addDays, isAfter, isBefore } from 'date-fns'
+import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-
-interface Call {
-  id: string
-  leaderId: string
-  leaderName: string
-  seniorId: string
-  seniorName: string
-  scheduledDate: Date
-  status: 'scheduled' | 'completed' | 'rescheduled' | 'missed'
-  score: number
-  notes?: string
-  rescheduledCount: number
-}
-
-const callStatuses = {
-  scheduled: { label: 'Programada', color: 'bg-blue-100 ', icon: Calendar },
-  completed: { label: 'Completada', color: 'bg-green-100 ', icon: CheckCircle },
-  rescheduled: { label: 'Re-agendada', color: 'bg-yellow-100 ', icon: AlertCircle },
-  missed: { label: 'No realizada', color: 'bg-red-100 ', icon: XCircle }
-}
-
-const scoreLabels = {
-  3: 'A tiempo',
-  2.5: 'Re-agendada con tiempo',
-  2: 'Fuera de tiempo',
-  1: 'Re-agendada a destiempo',
-  0: 'No realizada'
-}
+import { useCalls } from '@/hooks/useCalls'
+import { useUser } from '@/hooks/useUser'
+import { CallEvaluationModal } from '@/components/calls/CallEvaluationModal'
+import { CallCalendar } from '@/components/calls/CallCalendar'
+import { CallScheduleForm } from '@/components/calls/CallScheduleForm'
+import { CallCalendarItem } from '@/types'
+import { getLocalTimeFromTimestamp } from '@/utils/timezone'
 
 export default function LlamadasPage() {
-  const [calls, setCalls] = useState<Call[]>([
-    {
-      id: '1',
-      leaderId: 'leader1',
-      leaderName: 'María González',
-      seniorId: 'senior1',
-      seniorName: 'Carlos Rodríguez',
-      scheduledDate: new Date(),
-      status: 'scheduled',
-      score: 0,
-      rescheduledCount: 0
-    },
-    {
-      id: '2',
-      leaderId: 'leader2',
-      leaderName: 'Ana Martínez',
-      seniorId: 'senior1',
-      seniorName: 'Carlos Rodríguez',
-      scheduledDate: addDays(new Date(), 1),
-      status: 'completed',
-      score: 3,
-      notes: 'Excelente progreso en metas personales',
-      rescheduledCount: 0
-    },
-    {
-      id: '3',
-      leaderId: 'leader3',
-      leaderName: 'Luis Hernández',
-      seniorId: 'senior2',
-      seniorName: 'Patricia López',
-      scheduledDate: addDays(new Date(), -2),
-      status: 'missed',
-      score: 0,
-      rescheduledCount: 1
+  const { user } = useUser()
+  const {
+    callSchedule,
+    statistics,
+    nextCall,
+    pendingCalls,
+    isLoading,
+    createCallSchedule,
+    evaluateCall,
+    getSeniors,
+    refreshData
+  } = useCalls(user?.id || '')
+
+  // Hora local desde UTC
+  const getTimeFromTimestamp = (timestamp: string) => getLocalTimeFromTimestamp(timestamp)
+
+  // Convierte un TIME (UTC) de la BD a hora local HH:MM
+  function formatScheduleTime(time?: string) {
+    if (!time) return ''
+    // Acepta formatos HH:MM o HH:MM:SS
+    const normalized = time.length === 5 ? `${time}:00` : time
+    // Usar la fecha de hoy para respetar el DST actual
+    const todayStr = new Date().toISOString().split('T')[0]
+    const isoFromUtcTime = `${todayStr}T${normalized}Z`
+    const date = new Date(isoFromUtcTime)
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    return `${hours}:${minutes}`
+  }
+
+  const [showScheduleForm, setShowScheduleForm] = useState(false)
+  const [showEvaluationModal, setShowEvaluationModal] = useState(false)
+  const [selectedCall, setSelectedCall] = useState<CallCalendarItem | null>(null)
+
+  const handleCreateSchedule = async (seniorId: string, mondayTime?: string, wednesdayTime?: string, fridayTime?: string) => {
+    try {
+      await createCallSchedule(seniorId, mondayTime, wednesdayTime, fridayTime)
+      setShowScheduleForm(false)
+      // Actualizar los datos después de crear la programación
+      await refreshData()
+    } catch (error) {
+      console.error('Error creating call schedule:', error)
     }
-  ])
+  }
 
-  const [showAddCall, setShowAddCall] = useState(false)
-  const [newCall, setNewCall] = useState({
-    leaderId: '',
-    leaderName: '',
-    seniorId: '',
-    seniorName: '',
-    scheduledDate: new Date(),
-    notes: ''
-  })
-
-  // const [editingCall, setEditingCall] = useState<string | null>(null)
-
-  const handleAddCall = () => {
-    if (!newCall.leaderName || !newCall.seniorName) return
-
-    const call: Call = {
-      id: Date.now().toString(),
-      ...newCall,
-      status: 'scheduled',
-      score: 0,
-      rescheduledCount: 0
+  const handleEvaluateCall = async (callId: string, evaluationStatus: 'on_time' | 'late' | 'rescheduled' | 'not_done', score?: number, notes?: string) => {
+    try {
+      await evaluateCall(callId, evaluationStatus, score, notes)
+      setShowEvaluationModal(false)
+      setSelectedCall(null)
+      // Actualizar los datos después de evaluar la llamada
+      await refreshData()
+    } catch (error) {
+      console.error('Error evaluating call:', error)
     }
-
-    setCalls([...calls, call])
-    setNewCall({
-      leaderId: '',
-      leaderName: '',
-      seniorId: '',
-      seniorName: '',
-      scheduledDate: new Date(),
-      notes: ''
-    })
-    setShowAddCall(false)
   }
 
-  const handleUpdateCallStatus = (callId: string, status: Call['status'], score?: number) => {
-    setCalls(calls.map(call => 
-      call.id === callId 
-        ? { ...call, status, score: score ?? call.score }
-        : call
-    ))
+  const handleCallClick = (call: CallCalendarItem) => {
+    if (call.evaluation_status === 'pending' && !call.is_future) {
+      setSelectedCall(call)
+      setShowEvaluationModal(true)
+    }
   }
 
-  const handleRescheduleCall = (callId: string, newDate: Date) => {
-    setCalls(calls.map(call => 
-      call.id === callId 
-        ? { 
-            ...call, 
-            scheduledDate: newDate, 
-            status: 'scheduled',
-            rescheduledCount: call.rescheduledCount + 1
-          }
-        : call
-    ))
+  if (isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    )
   }
-
-  const completedCalls = calls.filter(call => call.status === 'completed').length
-  const totalCalls = calls.length
-  const averageScore = completedCalls > 0 
-    ? calls
-        .filter(call => call.status === 'completed')
-        .reduce((sum, call) => sum + call.score, 0) / completedCalls
-    : 0
-
-  const upcomingCalls = calls.filter(call => 
-    call.status === 'scheduled' && isAfter(call.scheduledDate, new Date())
-  )
-
-  const overdueCalls = calls.filter(call => 
-    call.status === 'scheduled' && isBefore(call.scheduledDate, new Date())
-  )
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold ">Gestión de Llamadas</h1>
-        <p className=" mt-2">
-          Programa y gestiona las llamadas de seguimiento con los líderes
+        <h1 className="text-3xl font-bold">Gestión de Llamadas</h1>
+        <p className="text-gray-600 mt-2">
+          Programa y gestiona las llamadas de seguimiento con tu Senior
         </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium ">Total Llamadas</CardTitle>
-            <Phone className="h-4 w-4 " />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold ">{totalCalls}</div>
-            <p className="text-xs ">
-              Este mes
-            </p>
-          </CardContent>
-        </Card>
+      {/* Estadísticas */}
+      {statistics && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Próxima Llamada</CardTitle>
+              <Phone className="h-4 w-4 text-gray-600" />
+            </CardHeader>
+            <CardContent>
+              {nextCall ? (
+                <>
+                  <div className="text-lg font-bold text-blue-600">
+                    {format(new Date(nextCall.scheduled_date), 'dd MMM', { locale: es })}, {getTimeFromTimestamp(nextCall.scheduled_date)}
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    Con {nextCall.senior_name}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-lg font-bold text-gray-400">Sin llamadas</div>
+                  <p className="text-xs text-gray-600">
+                    Programadas
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium ">Completadas</CardTitle>
-            <CheckCircle className="h-4 w-4 " />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold ">{completedCalls}</div>
-            <p className="text-xs ">
-              {totalCalls > 0 ? Math.round((completedCalls / totalCalls) * 100) : 0}% completado
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Porcentaje de Avance</CardTitle>
+              <CheckCircle className="h-4 w-4 text-gray-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{statistics.progress_percentage.toFixed(1)}%</div>
+              <p className="text-xs text-gray-600">
+                de {statistics.available_percentage.toFixed(1)}% disponible
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium ">Puntaje Promedio</CardTitle>
-            <Star className="h-4 w-4 " />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold ">{averageScore.toFixed(1)}</div>
-            <p className="text-xs ">
-              De 3.0 máximo
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Score Total</CardTitle>
+              <Star className="h-4 w-4 text-gray-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{statistics.total_score.toFixed(1)}</div>
+              <p className="text-xs text-gray-600">
+                Puntos obtenidos
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium ">Pendientes</CardTitle>
-            <Clock className="h-4 w-4 " />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold ">{upcomingCalls.length}</div>
-            <p className="text-xs ">
-              Por realizar
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Llamadas Pendientes</CardTitle>
+              <Clock className="h-4 w-4 text-gray-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{statistics.pending_calls} de {statistics.total_calls}</div>
+              <p className="text-xs text-gray-600">
+                Por evaluar
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-      {/* Add Call Button */}
-      <div className="mb-6">
-        <Button onClick={() => setShowAddCall(true)} className="bg-primary-600 hover:bg-primary-700">
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva Llamada
-        </Button>
-      </div>
 
-      {/* Add Call Form */}
-      {showAddCall && (
-        <Card className="mb-6 border-primary-200">
+      {/* Llamadas Pendientes */}
+      {pendingCalls.length > 0 && (
+        <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="">Programar Nueva Llamada</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-orange-600" />
+              Llamadas Pendientes de Evaluación
+            </CardTitle>
             <CardDescription>
-              Establece una nueva llamada de seguimiento
+              Tienes {pendingCalls.length} llamada{pendingCalls.length > 1 ? 's' : ''} que necesitan ser evaluadas
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium  mb-2">
-                  Líder
-                </label>
-                <input
-                  type="text"
-                  value={newCall.leaderName}
-                  onChange={(e) => setNewCall({...newCall, leaderName: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Nombre del líder"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium  mb-2">
-                  Senior
-                </label>
-                <input
-                  type="text"
-                  value={newCall.seniorName}
-                  onChange={(e) => setNewCall({...newCall, seniorName: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Nombre del senior"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium  mb-2">
-                  Fecha y Hora
-                </label>
-                <input
-                  type="datetime-local"
-                  value={format(newCall.scheduledDate, "yyyy-MM-dd'T'HH:mm")}
-                  onChange={(e) => setNewCall({...newCall, scheduledDate: new Date(e.target.value)})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium  mb-2">
-                  Notas (opcional)
-                </label>
-                <input
-                  type="text"
-                  value={newCall.notes}
-                  onChange={(e) => setNewCall({...newCall, notes: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Notas adicionales"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowAddCall(false)} className="bg-blue-600 hover:bg-blue-700 text-white">
-                Cancelar
-              </Button>
-              <Button 
-                onClick={handleAddCall}
-                disabled={!newCall.leaderName || !newCall.seniorName}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                Programar Llamada
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Overdue Calls Alert */}
-      {overdueCalls.length > 0 && (
-        <Card className="mb-6 border-red-200 bg-red-50">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <AlertCircle className="h-5 w-5 " />
-              <div>
-                <h3 className="font-medium ">
-                  {overdueCalls.length} llamada{overdueCalls.length > 1 ? 's' : ''} vencida{overdueCalls.length > 1 ? 's' : ''}
-                </h3>
-                <p className="text-sm ">
-                  Tienes llamadas pendientes que debieron realizarse
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Calls List */}
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-xl font-semibold  mb-6">
-            Todas las Llamadas
-          </h2>
-          <div className="space-y-4">
-            {calls.map((call) => {
-              const StatusIcon = callStatuses[call.status].icon
-              return (
-                <Card key={call.id} className={`${
-                  call.status === 'scheduled' && isBefore(call.scheduledDate, new Date()) 
-                    ? 'border-red-200 bg-red-50' 
-                    : ''
-                }`}>
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <StatusIcon className="h-5 w-5 " />
-                          <h3 className="text-lg font-semibold ">
-                            {call.leaderName} - {call.seniorName}
-                          </h3>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${callStatuses[call.status].color}`}>
-                            {callStatuses[call.status].label}
+          <CardContent>
+            <div className="space-y-3">
+              {pendingCalls.map((call) => (
+                <div
+                  key={call.call_id}
+                  className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <Phone className="h-4 w-4 text-orange-600" />
+                    <div>
+                      <p className="font-medium text-orange-900">
+                        {format(new Date(call.scheduled_date), 'dd MMM yyyy', { locale: es })}, {getTimeFromTimestamp(call.scheduled_date)}
+                      </p>
+                      <p className="text-sm text-orange-700">
+                        Con {call.senior_name}
+                        {call.is_overdue && (
+                          <span className="ml-2 text-red-600 font-medium">
+                            (Vencida hace {call.days_since_scheduled} día{call.days_since_scheduled > 1 ? 's' : ''})
                           </span>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm ">
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="h-4 w-4" />
-                            <span>{format(call.scheduledDate, 'dd MMM yyyy, HH:mm', { locale: es })}</span>
-                          </div>
-                          
-                          {call.status === 'completed' && (
-                            <div className="flex items-center space-x-2">
-                              <Star className="h-4 w-4" />
-                              <span>{scoreLabels[call.score as keyof typeof scoreLabels]} ({call.score} pts)</span>
-                            </div>
-                          )}
-                          
-                          {call.rescheduledCount > 0 && (
-                            <div className="flex items-center space-x-2">
-                              <AlertCircle className="h-4 w-4" />
-                              <span>Re-agendada {call.rescheduledCount} vez{call.rescheduledCount > 1 ? 'es' : ''}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {call.notes && (
-                          <p className="mt-2 text-sm  bg-gray-50 p-2 rounded">
-                            <strong>Notas:</strong> {call.notes}
-                          </p>
                         )}
-                      </div>
-
-                      <div className="flex space-x-2">
-                        {call.status === 'scheduled' && (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => handleUpdateCallStatus(call.id, 'completed', 3)}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              A tiempo
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleUpdateCallStatus(call.id, 'completed', 2)}
-                            >
-                              <Clock className="h-4 w-4 mr-1" />
-                              Fuera de tiempo
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleUpdateCallStatus(call.id, 'missed')}
-                              className=" border-red-300 hover:bg-red-50"
-                            >
-                              <XCircle className="h-4 w-4 mr-1" />
-                              No realizada
-                            </Button>
-                          </>
-                        )}
-                        
-                        {call.status === 'missed' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              const newDate = new Date()
-                              newDate.setDate(newDate.getDate() + 1)
-                              handleRescheduleCall(call.id, newDate)
-                            }}
-                          >
-                            <Calendar className="h-4 w-4 mr-1" />
-                            Re-agendar
-                          </Button>
-                        )}
-                      </div>
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      const callItem: CallCalendarItem = {
+                        call_id: call.call_id,
+                        scheduled_time: call.scheduled_date,
+                        senior_name: call.senior_name,
+                        evaluation_status: 'pending',
+                        score: 0,
+                        color_code: 'blue',
+                        is_pending: true,
+                        is_future: false,
+                        date: call.scheduled_date.split('T')[0]
+                      }
+                      handleCallClick(callItem)
+                    }}
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    Evaluar
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      
+
+      {/* Botón de Configurar Horarios (cuando no hay programación) */}
+      {!callSchedule && (
+        <div className="mb-4 flex justify-end">
+          <Button
+            onClick={() => setShowScheduleForm(true)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Configurar Horarios
+          </Button>
         </div>
+      )}
+
+      {/* Calendario de Llamadas */}
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold mb-4">Calendario de Llamadas</h2>
+        <CallCalendar userId={user?.id || ''} onCallClick={handleCallClick} />
       </div>
 
-      {/* Empty State */}
-      {calls.length === 0 && (
-        <Card className="text-center py-12">
-          <CardContent>
-            <Phone className="h-12 w-12  mx-auto mb-4" />
-            <h3 className="text-lg font-medium  mb-2">
-              No hay llamadas programadas
-            </h3>
-            <p className=" mb-4">
-              Comienza programando tu primera llamada de seguimiento
-            </p>
-            <Button onClick={() => setShowAddCall(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Plus className="mr-2 h-4 w-4" />
-              Programar Primera Llamada
+      {/* Programación de Llamadas (movida debajo del calendario) */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Programación de Llamadas</h2>
+          {!callSchedule && (
+            <Button
+              onClick={() => setShowScheduleForm(true)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Configurar Horarios
             </Button>
-          </CardContent>
-        </Card>
+          )}
+        </div>
+
+        {callSchedule ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Horarios Configurados
+              </CardTitle>
+              <CardDescription>
+                Tu programación automática de llamadas está activa
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {callSchedule.monday_time && (
+                  <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+                    <Calendar className="h-4 w-4 text-blue-600" />
+                    <div>
+                      <p className="font-medium text-blue-900">Lunes</p>
+                      <p className="text-sm text-blue-700">{formatScheduleTime(callSchedule.monday_time)}</p>
+                    </div>
+                  </div>
+                )}
+                {callSchedule.wednesday_time && (
+                  <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+                    <Calendar className="h-4 w-4 text-blue-600" />
+                    <div>
+                      <p className="font-medium text-blue-900">Miércoles</p>
+                      <p className="text-sm text-blue-700">{formatScheduleTime(callSchedule.wednesday_time)}</p>
+                    </div>
+                  </div>
+                )}
+                {callSchedule.friday_time && (
+                  <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+                    <Calendar className="h-4 w-4 text-blue-600" />
+                    <div>
+                      <p className="font-medium text-blue-900">Viernes</p>
+                      <p className="text-sm text-blue-700">{formatScheduleTime(callSchedule.friday_time)}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-dashed border-2 border-gray-300">
+            <CardContent className="text-center py-12">
+              <Settings className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No hay programación configurada
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Configura tus horarios de llamadas para generar automáticamente las llamadas con tu Senior
+              </p>
+              <Button
+                onClick={() => setShowScheduleForm(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Configurar Horarios
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Modales */}
+      <CallScheduleForm
+        isOpen={showScheduleForm}
+        onClose={() => setShowScheduleForm(false)}
+        onSubmit={handleCreateSchedule}
+        getSeniors={getSeniors}
+      />
+
+      {selectedCall && (
+        <CallEvaluationModal
+          call={{
+            id: selectedCall.call_id,
+            scheduled_date: selectedCall.scheduled_time,
+            senior_name: selectedCall.senior_name,
+            senior_email: '' // No disponible en CallCalendarItem
+          }}
+          isOpen={showEvaluationModal}
+          onClose={() => {
+            setShowEvaluationModal(false)
+            setSelectedCall(null)
+          }}
+          onEvaluate={handleEvaluateCall}
+        />
       )}
     </div>
   )
