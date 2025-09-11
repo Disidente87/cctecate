@@ -257,7 +257,12 @@ export default function LlamadasPage() {
       {/* Calendario de Llamadas */}
       <div className="mb-6">
         <h2 className="text-xl font-semibold mb-4">Calendario de Llamadas</h2>
-        <CallCalendar userId={user?.id || ''} onCallClick={handleCallClick} />
+        <CallCalendar 
+          userId={user?.id || ''} 
+          onCallClick={handleCallClick}
+          scheduleStartDate={callSchedule?.start_date}
+          scheduleEndDate={callSchedule?.end_date}
+        />
       </div>
 
       {/* Programación de Llamadas (movida debajo del calendario) */}

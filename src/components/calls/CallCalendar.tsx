@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Phone } from 'lucide-react'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns'
+import { format, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { CallCalendarItem } from '@/types'
 import { supabase } from '@/lib/supabase'
@@ -24,23 +24,22 @@ const colorClasses = {
 }
 
 export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
-  const [currentDate, setCurrentDate] = useState(new Date())
+  const [anchorDate, setAnchorDate] = useState(new Date())
   const [calendarData, setCalendarData] = useState<CallCalendarItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [autoAnchored, setAutoAnchored] = useState(false)
 
   const loadCalendarData = async () => {
     setIsLoading(true)
     try {
-      // Usar startOfWeek y endOfWeek para incluir días de semanas anteriores y siguientes
-      const monthStart = startOfMonth(currentDate)
-      const monthEnd = endOfMonth(currentDate)
-      const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 }) // Lunes como primer día
-      const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 }) // Lunes como primer día
+      // Ventana fija de 7 semanas (Lunes a Domingo) basada en anchorDate
+      const windowStart = startOfWeek(anchorDate, { weekStartsOn: 1 })
+      const windowEnd = endOfWeek(addWeeks(windowStart, 6), { weekStartsOn: 1 })
       
       const { data, error } = await supabase.rpc('get_calls_calendar_view', {
         p_leader_id: userId,
-        p_start_date: format(calendarStart, 'yyyy-MM-dd'),
-        p_end_date: format(calendarEnd, 'yyyy-MM-dd')
+        p_start_date: format(windowStart, 'yyyy-MM-dd'),
+        p_end_date: format(windowEnd, 'yyyy-MM-dd')
       })
 
       if (error) {
@@ -49,6 +48,26 @@ export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
       }
 
       setCalendarData(data || [])
+      // Ajustar la ventana para que termine en la última semana con llamadas (solo una vez)
+      if (!autoAnchored && data && data.length > 0) {
+        let maxDateStr = ''
+        let minDateStr = ''
+        for (const item of data as any[]) {
+          if (!maxDateStr || item.date > maxDateStr) maxDateStr = item.date
+          if (!minDateStr || item.date < minDateStr) minDateStr = item.date
+        }
+        if (maxDateStr) {
+          const [y, m, d] = maxDateStr.split('-').map((v: string) => parseInt(v, 10))
+          const maxDate = new Date(y, m - 1, d)
+          // Calcular inicio de ventana para que el final coincida con la semana de maxDate
+          const targetStart = startOfWeek(addWeeks(maxDate, -6), { weekStartsOn: 1 })
+          const currentStart = startOfWeek(anchorDate, { weekStartsOn: 1 })
+          if (currentStart.getTime() !== targetStart.getTime()) {
+            setAnchorDate(targetStart)
+          }
+          setAutoAnchored(true)
+        }
+      }
     } catch (error) {
       console.error('Error loading call calendar:', error)
     } finally {
@@ -60,12 +79,10 @@ export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
     if (userId) {
       loadCalendarData()
     }
-  }, [userId, currentDate])
+  }, [userId, anchorDate])
 
-  const monthStart = startOfMonth(currentDate)
-  const monthEnd = endOfMonth(currentDate)
-  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 }) // Lunes como primer día
-  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 }) // Lunes como primer día
+  const calendarStart = startOfWeek(anchorDate, { weekStartsOn: 1 })
+  const calendarEnd = endOfWeek(addWeeks(calendarStart, 6), { weekStartsOn: 1 })
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd })
 
   const getCallsForDate = (date: Date) => {
@@ -76,10 +93,8 @@ export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
   // Hora local desde UTC
   const getTimeFromTimestamp = (timestamp: string) => getLocalTimeFromTimestamp(timestamp)
 
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentDate(prev => 
-      direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
-    )
+  const navigateWindow = (direction: 'prev' | 'next') => {
+    setAnchorDate(prev => direction === 'prev' ? subWeeks(prev, 7) : addWeeks(prev, 7))
   }
 
   return (
@@ -92,14 +107,14 @@ export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
               Calendario de Llamadas
             </CardTitle>
             <CardDescription>
-              {format(currentDate, 'MMMM yyyy', { locale: es })}
+              {`${format(calendarStart, 'dd MMM', { locale: es })} - ${format(calendarEnd, 'dd MMM yyyy', { locale: es })}`}
             </CardDescription>
           </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigateMonth('prev')}
+              onClick={() => navigateWindow('prev')}
               disabled={isLoading}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -107,7 +122,7 @@ export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigateMonth('next')}
+              onClick={() => navigateWindow('next')}
               disabled={isLoading}
             >
               <ChevronRight className="h-4 w-4" />
@@ -133,14 +148,14 @@ export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((day) => {
                 const calls = getCallsForDate(day)
-                const isCurrentMonth = isSameMonth(day, currentDate)
+                const isCurrentMonth = isSameMonth(day, anchorDate)
                 const isToday = isSameDay(day, new Date())
 
                 return (
                   <div
                     key={day.toISOString()}
                     className={`
-                      min-h-[80px] p-1 border border-gray-200 rounded
+                      min-h-[60px] p-1 border border-gray-200 rounded
                       ${isCurrentMonth ? 'bg-white' : 'bg-gray-50'}
                       ${isToday ? 'ring-2 ring-blue-500' : ''}
                     `}
