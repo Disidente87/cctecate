@@ -1,4 +1,7 @@
-import { createClient } from '@/lib/supabase-server'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
@@ -8,42 +11,72 @@ import {
   Phone, 
   CheckCircle,
   Clock,
-  Star
+  Star,
+  Loader2
 } from 'lucide-react'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
+import { useRouter } from 'next/navigation'
+import { useDashboard } from '@/hooks/useDashboard'
+import { User } from '@/types'
 
-export default async function PortalDashboard() {
-  const supabase = await createClient()
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+interface SupabaseUser {
+  id: string
+  email?: string
+  user_metadata?: {
+    role?: string
+    name?: string
+  }
+}
 
-  if (!user) {
-    // Redirigir al login si no hay usuario
-    redirect('/auth/login')
+export default function PortalDashboard() {
+  const [user, setUser] = useState<SupabaseUser | null>(null)
+  const [userRole, setUserRole] = useState<string>('lider')
+  const [userName, setUserName] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        router.push('/auth/login')
+        return
+      }
+
+      setUser(user)
+      setUserRole(user.user_metadata?.role || 'lider')
+      setUserName(user.user_metadata?.name || user.email || '')
+      setLoading(false)
+    }
+
+    getUser()
+  }, [router])
+
+  const { stats, recentActivities, loading: dashboardLoading, error } = useDashboard(user?.id || '')
+
+  if (loading || dashboardLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-600 mb-4" />
+            <p className="text-gray-600">Cargando dashboard...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  const userRole = user.user_metadata?.role || 'lider'
-  const userName = user.user_metadata?.name || user.email
-
-  // Datos mock para el dashboard (en una implementación real, estos vendrían de la base de datos)
-  const stats = {
-    goalsCompleted: 12,
-    totalGoals: 20,
-    activitiesCompleted: 8,
-    totalActivities: 10,
-    callsThisMonth: 4,
-    leaderboardPosition: 3
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <p className="text-red-700">{error}</p>
+        </div>
+      </div>
+    )
   }
-
-  const recentActivities = [
-    { id: 1, title: 'Meditación matutina', completed: true, date: '2024-01-15' },
-    { id: 2, title: 'Ejercicio cardiovascular', completed: true, date: '2024-01-14' },
-    { id: 3, title: 'Lectura personal', completed: false, date: '2024-01-16' },
-    { id: 4, title: 'Llamada con Senior', completed: true, date: '2024-01-13' },
-  ]
 
   const quickActions = [
     {
@@ -98,7 +131,7 @@ export default async function PortalDashboard() {
           <CardContent>
             <div className="text-2xl font-bold ">{stats.goalsCompleted}/{stats.totalGoals}</div>
             <p className="text-xs ">
-              {Math.round((stats.goalsCompleted / stats.totalGoals) * 100)}% completado
+              {stats.totalGoals > 0 ? Math.round((stats.goalsCompleted / stats.totalGoals) * 100) : 0}% completado
             </p>
           </CardContent>
         </Card>
@@ -111,7 +144,7 @@ export default async function PortalDashboard() {
           <CardContent>
             <div className="text-2xl font-bold ">{stats.activitiesCompleted}/{stats.totalActivities}</div>
             <p className="text-xs ">
-              {Math.round((stats.activitiesCompleted / stats.totalActivities) * 100)}% completado
+              {stats.totalActivities > 0 ? Math.round((stats.activitiesCompleted / stats.totalActivities) * 100) : 0}% completado
             </p>
           </CardContent>
         </Card>
@@ -124,7 +157,7 @@ export default async function PortalDashboard() {
           <CardContent>
             <div className="text-2xl font-bold ">{stats.callsThisMonth}</div>
             <p className="text-xs ">
-              +2 desde el mes pasado
+              {stats.callsThisMonth > 0 ? 'Llamadas programadas' : 'Sin llamadas este mes'}
             </p>
           </CardContent>
         </Card>
@@ -135,9 +168,11 @@ export default async function PortalDashboard() {
             <Trophy className="h-4 w-4 " />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold ">#{stats.leaderboardPosition}</div>
+            <div className="text-2xl font-bold ">
+              {stats.leaderboardPosition > 0 ? `#${stats.leaderboardPosition}` : 'N/A'}
+            </div>
             <p className="text-xs ">
-              En tu generación
+              {stats.leaderboardPosition > 0 ? 'En tu generación' : 'Sin datos de ranking'}
             </p>
           </CardContent>
         </Card>
@@ -174,29 +209,35 @@ export default async function PortalDashboard() {
           <Card>
             <CardContent className="p-6">
               <div className="space-y-4">
-                {recentActivities.map((activity) => (
-                  <div key={activity.id} className="flex items-center space-x-3">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                      activity.completed 
-                        ? 'bg-green-100 ' 
-                        : 'bg-gray-100 text-gray-400'
-                    }`}>
-                      {activity.completed ? (
-                        <CheckCircle className="h-4 w-4" />
-                      ) : (
-                        <Clock className="h-4 w-4" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className={`text-sm font-medium ${
-                        activity.completed ? '' : ''
+                {recentActivities.length > 0 ? (
+                  recentActivities.map((activity) => (
+                    <div key={activity.id} className="flex items-center space-x-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                        activity.completed 
+                          ? 'bg-green-100 text-green-600' 
+                          : 'bg-gray-100 text-gray-400'
                       }`}>
-                        {activity.title}
-                      </p>
-                      <p className="text-xs ">{activity.date}</p>
+                        {activity.completed ? (
+                          <CheckCircle className="h-4 w-4" />
+                        ) : (
+                          <Clock className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-sm font-medium ${
+                          activity.completed ? 'text-gray-900' : 'text-gray-500'
+                        }`}>
+                          {activity.title}
+                        </p>
+                        <p className="text-xs text-gray-500">{activity.date}</p>
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500 text-sm">No hay actividades recientes</p>
                   </div>
-                ))}
+                )}
               </div>
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <Link href="/portal/calendario">
