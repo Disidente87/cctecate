@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Phone } from 'lucide-react'
@@ -29,7 +29,7 @@ export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [autoAnchored, setAutoAnchored] = useState(false)
 
-  const loadCalendarData = async () => {
+  const loadCalendarData = useCallback(async () => {
     setIsLoading(true)
     try {
       // Ventana fija de 7 semanas (Lunes a Domingo) basada en anchorDate
@@ -52,7 +52,7 @@ export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
       if (!autoAnchored && data && data.length > 0) {
         let maxDateStr = ''
         let minDateStr = ''
-        for (const item of data as any[]) {
+        for (const item of data as CallCalendarItem[]) {
           if (!maxDateStr || item.date > maxDateStr) maxDateStr = item.date
           if (!minDateStr || item.date < minDateStr) minDateStr = item.date
         }
@@ -73,13 +73,13 @@ export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [anchorDate, autoAnchored, userId])
 
   useEffect(() => {
     if (userId) {
       loadCalendarData()
     }
-  }, [userId, anchorDate])
+  }, [userId, anchorDate, loadCalendarData])
 
   const calendarStart = startOfWeek(anchorDate, { weekStartsOn: 1 })
   const calendarEnd = endOfWeek(addWeeks(calendarStart, 6), { weekStartsOn: 1 })

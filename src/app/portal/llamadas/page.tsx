@@ -260,8 +260,6 @@ export default function LlamadasPage() {
         <CallCalendar 
           userId={user?.id || ''} 
           onCallClick={handleCallClick}
-          scheduleStartDate={callSchedule?.start_date}
-          scheduleEndDate={callSchedule?.end_date}
         />
       </div>
 
