@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
@@ -16,116 +16,61 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react'
-
-interface LeaderboardEntry {
-  id: string
-  name: string
-  generation: string
-  goalsCompletionPercentage: number
-  activitiesCompletionPercentage: number
-  callsScore: number
-  totalScore: number
-  rank: number
-  avatar?: string
-}
-
-const mockData: LeaderboardEntry[] = [
-  {
-    id: '1',
-    name: 'María González',
-    generation: 'C1',
-    goalsCompletionPercentage: 95,
-    activitiesCompletionPercentage: 90,
-    callsScore: 2.8,
-    totalScore: 92.5,
-    rank: 1
-  },
-  {
-    id: '2',
-    name: 'Carlos Rodríguez',
-    generation: 'C1',
-    goalsCompletionPercentage: 88,
-    activitiesCompletionPercentage: 85,
-    callsScore: 2.9,
-    totalScore: 87.2,
-    rank: 2
-  },
-  {
-    id: '3',
-    name: 'Ana Martínez',
-    generation: 'C2',
-    goalsCompletionPercentage: 82,
-    activitiesCompletionPercentage: 88,
-    callsScore: 2.7,
-    totalScore: 85.8,
-    rank: 3
-  },
-  {
-    id: '4',
-    name: 'Luis Hernández',
-    generation: 'C1',
-    goalsCompletionPercentage: 75,
-    activitiesCompletionPercentage: 80,
-    callsScore: 2.5,
-    totalScore: 78.3,
-    rank: 4
-  },
-  {
-    id: '5',
-    name: 'Patricia López',
-    generation: 'C2',
-    goalsCompletionPercentage: 70,
-    activitiesCompletionPercentage: 75,
-    callsScore: 2.6,
-    totalScore: 73.2,
-    rank: 5
-  },
-  {
-    id: '6',
-    name: 'Roberto Silva',
-    generation: 'C3',
-    goalsCompletionPercentage: 65,
-    activitiesCompletionPercentage: 70,
-    callsScore: 2.4,
-    totalScore: 68.1,
-    rank: 6
-  }
-]
+import { useLeaderboard } from '@/hooks/useLeaderboard'
+import { useUser } from '@/hooks/useUser'
 
 export default function LeaderboardPage() {
+  const { user } = useUser()
+  const {
+    leaderboardData,
+    stats,
+    availableGenerations,
+    isLoading,
+    refreshData
+  } = useLeaderboard(user?.id || '')
+
   const [selectedGeneration, setSelectedGeneration] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'total' | 'goals' | 'activities' | 'calls'>('total')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
-  const generations = ['all', 'C1', 'C2', 'C3', 'C4', 'C5']
+  // Generaciones disponibles incluyendo "Todas"
+  const generations = ['all', ...availableGenerations]
   
+  // Filtrar datos según generación seleccionada
   const filteredData = selectedGeneration === 'all' 
-    ? mockData 
-    : mockData.filter(entry => entry.generation === selectedGeneration)
+    ? leaderboardData 
+    : leaderboardData.filter(entry => entry.generation === selectedGeneration)
 
   const sortedData = [...filteredData].sort((a, b) => {
     let aValue: number, bValue: number
     
     switch (sortBy) {
       case 'goals':
-        aValue = a.goalsCompletionPercentage
-        bValue = b.goalsCompletionPercentage
+        aValue = a.goals_completion_percentage
+        bValue = b.goals_completion_percentage
         break
       case 'activities':
-        aValue = a.activitiesCompletionPercentage
-        bValue = b.activitiesCompletionPercentage
+        aValue = a.activities_completion_percentage
+        bValue = b.activities_completion_percentage
         break
       case 'calls':
-        aValue = a.callsScore
-        bValue = b.callsScore
+        aValue = a.calls_score
+        bValue = b.calls_score
         break
       default:
-        aValue = a.totalScore
-        bValue = b.totalScore
+        aValue = a.total_score
+        bValue = b.total_score
     }
     
     return sortOrder === 'desc' ? bValue - aValue : aValue - bValue
   })
+
+  // Recargar datos cuando cambie la generación seleccionada
+  useEffect(() => {
+    if (user?.id) {
+      refreshData(selectedGeneration === 'all' ? undefined : selectedGeneration)
+    }
+  }, [selectedGeneration, user?.id, refreshData])
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -169,6 +114,16 @@ export default function LeaderboardPage() {
       <ChevronUp className="h-4 w-4" />
   }
 
+  if (isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Header */}
@@ -180,63 +135,65 @@ export default function LeaderboardPage() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium ">Total Participantes</CardTitle>
-            <Users className="h-4 w-4 " />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold ">{mockData.length}</div>
-            <p className="text-xs ">
-              En todas las generaciones
-            </p>
-          </CardContent>
-        </Card>
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium ">Total Participantes</CardTitle>
+              <Users className="h-4 w-4 " />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold ">{stats.total_participants}</div>
+              <p className="text-xs ">
+                En todas las generaciones
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium ">Puntaje Promedio</CardTitle>
-            <TrendingUp className="h-4 w-4 " />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold ">
-              {Math.round(mockData.reduce((sum, entry) => sum + entry.totalScore, 0) / mockData.length)}
-            </div>
-            <p className="text-xs ">
-              Puntos totales
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium ">Puntaje Promedio</CardTitle>
+              <TrendingUp className="h-4 w-4 " />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold ">
+                {Math.round(stats.average_score)}
+              </div>
+              <p className="text-xs ">
+                Puntos totales
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium ">Generación Líder</CardTitle>
-            <Trophy className="h-4 w-4 " />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold ">C1</div>
-            <p className="text-xs ">
-              Mejor rendimiento promedio
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium ">Generación Líder</CardTitle>
+              <Trophy className="h-4 w-4 " />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold ">{stats.leading_generation || 'N/A'}</div>
+              <p className="text-xs ">
+                Mejor rendimiento promedio
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium ">Meta Completada</CardTitle>
-            <Target className="h-4 w-4 " />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold ">
-              {Math.round(mockData.reduce((sum, entry) => sum + entry.goalsCompletionPercentage, 0) / mockData.length)}%
-            </div>
-            <p className="text-xs ">
-              Promedio de metas
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium ">Meta Completada</CardTitle>
+              <Target className="h-4 w-4 " />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold ">
+                {Math.round(stats.average_goals_completion)}%
+              </div>
+              <p className="text-xs ">
+                Promedio de metas
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Filters and Controls */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 mb-6">
@@ -298,12 +255,12 @@ export default function LeaderboardPage() {
       {/* Leaderboard */}
       <div className="space-y-4">
         {sortedData.map((entry) => (
-          <Card key={entry.id} className={`${getRankColor(entry.rank)} transition-all duration-200 hover:shadow-md`}>
+          <Card key={entry.user_id} className={`${getRankColor(entry.rank_position)} transition-all duration-200 hover:shadow-md`}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center justify-center w-12 h-12">
-                    {getRankIcon(entry.rank)}
+                    {getRankIcon(entry.rank_position)}
                   </div>
                   
                   <div className="flex-1">
@@ -319,22 +276,22 @@ export default function LeaderboardPage() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div className="flex items-center space-x-2">
                         <Target className="h-4 w-4 " />
-                        <span className="">Metas: {entry.goalsCompletionPercentage}%</span>
+                        <span className="">Metas: {entry.goals_completion_percentage.toFixed(1)}%</span>
                       </div>
                       
                       <div className="flex items-center space-x-2">
                         <Star className="h-4 w-4 " />
-                        <span className="">Actividades: {entry.activitiesCompletionPercentage}%</span>
+                        <span className="">Actividades: {entry.activities_completion_percentage.toFixed(1)}%</span>
                       </div>
                       
                       <div className="flex items-center space-x-2">
                         <Phone className="h-4 w-4 " />
-                        <span className="">Llamadas: {entry.callsScore}/3.0</span>
+                        <span className="">Llamadas: {entry.calls_score.toFixed(1)}/3.0</span>
                       </div>
                       
                       <div className="flex items-center space-x-2">
                         <Trophy className="h-4 w-4 " />
-                        <span className="font-semibold ">Total: {entry.totalScore.toFixed(1)}</span>
+                        <span className="font-semibold ">Total: {entry.total_score.toFixed(1)}</span>
                       </div>
                     </div>
                   </div>
@@ -342,7 +299,7 @@ export default function LeaderboardPage() {
 
                 <div className="text-right">
                   <div className="text-2xl font-bold ">
-                    {entry.totalScore.toFixed(1)}
+                    {entry.total_score.toFixed(1)}
                   </div>
                   <div className="text-sm ">
                     puntos totales
@@ -360,10 +317,10 @@ export default function LeaderboardPage() {
           Rendimiento por Generación
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {generations.slice(1).map((gen) => {
-            const genData = mockData.filter(entry => entry.generation === gen)
+          {availableGenerations.map((gen) => {
+            const genData = leaderboardData.filter(entry => entry.generation === gen)
             const avgScore = genData.length > 0 
-              ? genData.reduce((sum, entry) => sum + entry.totalScore, 0) / genData.length 
+              ? genData.reduce((sum, entry) => sum + entry.total_score, 0) / genData.length 
               : 0
             
             return (
@@ -392,7 +349,7 @@ export default function LeaderboardPage() {
                       <span className="text-sm ">Metas Promedio:</span>
                       <span className="text-sm">
                         {genData.length > 0 
-                          ? Math.round(genData.reduce((sum, entry) => sum + entry.goalsCompletionPercentage, 0) / genData.length)
+                          ? Math.round(genData.reduce((sum, entry) => sum + entry.goals_completion_percentage, 0) / genData.length)
                           : 0}%
                       </span>
                     </div>
