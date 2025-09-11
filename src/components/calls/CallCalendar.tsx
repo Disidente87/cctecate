@@ -94,7 +94,7 @@ export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
   const getTimeFromTimestamp = (timestamp: string) => getLocalTimeFromTimestamp(timestamp)
 
   const navigateWindow = (direction: 'prev' | 'next') => {
-    setAnchorDate(prev => direction === 'prev' ? subWeeks(prev, 7) : addWeeks(prev, 7))
+    setAnchorDate(prev => direction === 'prev' ? subWeeks(prev, 1) : addWeeks(prev, 1))
   }
 
   return (
