@@ -73,7 +73,7 @@ const calculateGoalProgress = async (goal: GoalWithMechanisms, userId: string): 
         
         // Mecanismos empiezan 1 semana después de PL1
         mechanismStartDate = new Date(pl1Date)
-        mechanismStartDate.setDate(mechanismStartDate.getDate() + 7)
+        mechanismStartDate.setDate(mechanismStartDate.getDate() + 9)
         
         // Mecanismos terminan 1 semana antes de PL3
         mechanismEndDate = new Date(pl3Date)
