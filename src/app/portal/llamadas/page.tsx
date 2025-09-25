@@ -15,7 +15,7 @@ import {
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useCalls } from '@/hooks/useCalls'
-import { useUser } from '@/hooks/useUser'
+import { useSelectedUser } from '@/contexts/selected-user'
 import { CallEvaluationModal } from '@/components/calls/CallEvaluationModal'
 import { CallCalendar } from '@/components/calls/CallCalendar'
 import { CallScheduleForm } from '@/components/calls/CallScheduleForm'
@@ -23,7 +23,7 @@ import { CallCalendarItem } from '@/types'
 import { getLocalTimeFromTimestamp } from '@/utils/timezone'
 
 export default function LlamadasPage() {
-  const { user } = useUser()
+  const { selectedUserId } = useSelectedUser()
   const {
     callSchedule,
     statistics,
@@ -32,9 +32,8 @@ export default function LlamadasPage() {
     isLoading,
     createCallSchedule,
     evaluateCall,
-    getSeniors,
     refreshData
-  } = useCalls(user?.id || '')
+  } = useCalls(selectedUserId)
 
   // Hora local desde UTC
   const getTimeFromTimestamp = (timestamp: string) => getLocalTimeFromTimestamp(timestamp)
@@ -258,7 +257,7 @@ export default function LlamadasPage() {
       <div className="mb-6">
         <h2 className="text-xl font-semibold mb-4">Calendario de Llamadas</h2>
         <CallCalendar 
-          userId={user?.id || ''} 
+          userId={selectedUserId} 
           onCallClick={handleCallClick}
         />
       </div>
@@ -349,7 +348,6 @@ export default function LlamadasPage() {
         isOpen={showScheduleForm}
         onClose={() => setShowScheduleForm(false)}
         onSubmit={handleCreateSchedule}
-        getSeniors={getSeniors}
       />
 
       {selectedCall && (

@@ -14,8 +14,10 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { getActivitiesWithCompletion, toggleActivityCompletion, type ActivityWithCompletion } from '@/lib/activities'
 import { supabase } from '@/lib/supabase'
+import { useSelectedUser } from '@/contexts/selected-user'
 
 export default function ActividadesPage() {
+  const { selectedUserId, authUserId } = useSelectedUser()
   const [user, setUser] = useState<{ id: string } | null>(null)
   const [activities, setActivities] = useState<ActivityWithCompletion[]>([])
   const [loading, setLoading] = useState(true)
@@ -28,11 +30,10 @@ export default function ActividadesPage() {
         setLoading(true)
         setError(null)
         
-        // Obtener usuario
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          setUser(user)
-          const activitiesData = await getActivitiesWithCompletion(user.id)
+        const viewUserId = selectedUserId || authUserId
+        if (viewUserId) {
+          setUser({ id: viewUserId })
+          const activitiesData = await getActivitiesWithCompletion(viewUserId)
           setActivities(activitiesData)
         }
       } catch (err) {
@@ -44,7 +45,7 @@ export default function ActividadesPage() {
     }
 
     loadUserAndActivities()
-  }, [])
+  }, [selectedUserId, authUserId])
 
   const handleToggleActivity = async (activityId: string) => {
     if (!user) return

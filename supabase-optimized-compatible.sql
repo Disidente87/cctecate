@@ -14,6 +14,8 @@ CREATE TABLE profiles (
   name TEXT NOT NULL,
   role TEXT CHECK (role IN ('lider', 'senior', 'admin')) NOT NULL DEFAULT 'lider',
   generation TEXT NOT NULL,
+  -- Senior asignado (nullable: permite registro sin asignación inmediata)
+  senior_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
   energy_drainers TEXT[] DEFAULT '{}',
   energy_givers TEXT[] DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -173,6 +175,7 @@ CREATE TABLE call_schedules (
 -- Índices existentes (MANTENER)
 CREATE INDEX idx_profiles_role ON profiles(role);
 CREATE INDEX idx_profiles_generation ON profiles(generation);
+CREATE INDEX idx_profiles_senior_id ON profiles(senior_id);
 CREATE INDEX idx_goals_user_id ON goals(user_id);
 CREATE INDEX idx_goals_category ON goals(category);
 CREATE INDEX idx_goals_completed_by_senior ON goals(completed_by_senior_id);
@@ -1093,6 +1096,12 @@ CREATE POLICY "Leaders can view senior profiles" ON profiles
         role = 'senior' AND is_user_leader()
     );
 
+-- Política para que los seniors puedan ver a sus líderes asignados
+CREATE POLICY "Seniors can view assigned leaders" ON profiles
+    FOR SELECT USING (
+        role = 'lider' AND senior_id = auth.uid()
+    );
+
 -- Función auxiliar para verificar si el usuario es admin
 CREATE OR REPLACE FUNCTION is_user_admin()
 RETURNS BOOLEAN AS $$
@@ -1149,6 +1158,90 @@ CREATE POLICY "Users can update mechanisms for their goals" ON mechanisms
             AND goals.user_id = auth.uid()
         )
     );
+
+-- Políticas adicionales para que SENIORS vean datos de líderes asignados
+
+-- Seniors pueden ver metas de sus líderes
+CREATE POLICY "Seniors can view leaders' goals" ON goals
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM profiles p
+      WHERE p.id = goals.user_id
+        AND p.senior_id = auth.uid()
+    )
+  );
+
+-- Seniors pueden ver mecanismos de metas de sus líderes
+CREATE POLICY "Seniors can view leaders' mechanisms" ON mechanisms
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM goals g
+      JOIN profiles p ON p.id = g.user_id
+      WHERE g.id = mechanisms.goal_id
+        AND p.senior_id = auth.uid()
+    )
+  );
+
+-- Seniors pueden ver completions de actividades gustosas de sus líderes
+CREATE POLICY "Seniors can view leaders' activity completions" ON user_activity_completions
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM profiles p
+      WHERE p.id = user_activity_completions.user_id
+        AND p.senior_id = auth.uid()
+    )
+  );
+
+-- Seniors pueden ver excepciones de mecanismos de sus líderes
+CREATE POLICY "Seniors can view leaders' mechanism exceptions" ON mechanism_schedule_exceptions
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM mechanisms m
+      JOIN goals g ON g.id = m.goal_id
+      JOIN profiles p ON p.id = g.user_id
+      WHERE m.id = mechanism_schedule_exceptions.mechanism_id
+        AND p.senior_id = auth.uid()
+    )
+  );
+
+-- Seniors pueden ver completions de mecanismos de sus líderes
+CREATE POLICY "Seniors can view leaders' mechanism completions" ON mechanism_completions
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM mechanisms m
+      JOIN goals g ON g.id = m.goal_id
+      JOIN profiles p ON p.id = g.user_id
+      WHERE m.id = mechanism_completions.mechanism_id
+        AND p.senior_id = auth.uid()
+    )
+  );
+
+-- Seniors pueden ver llamadas de sus líderes
+CREATE POLICY "Seniors can view leaders' calls" ON calls
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM profiles p
+      WHERE p.id = calls.leader_id
+        AND p.senior_id = auth.uid()
+    )
+  );
+
+-- Seniors pueden ver call schedules de sus líderes (opcional)
+CREATE POLICY "Seniors can view leaders' schedules" ON call_schedules
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM profiles p
+      WHERE p.id = call_schedules.leader_id
+        AND p.senior_id = auth.uid()
+    )
+  );
 
 CREATE POLICY "Users can delete mechanisms for their goals" ON mechanisms
     FOR DELETE USING (
@@ -1254,6 +1347,7 @@ COMMENT ON TABLE call_schedules IS 'Programación automática de llamadas (L, M,
 -- Comentarios en las columnas importantes
 COMMENT ON COLUMN profiles.role IS 'Rol del usuario: lider, senior, admin';
 COMMENT ON COLUMN profiles.generation IS 'Generación a la que pertenece el usuario';
+COMMENT ON COLUMN profiles.senior_id IS 'ID del Senior asignado para el líder (nullable)';
 COMMENT ON COLUMN profiles.energy_drainers IS 'Lista de cosas que quitan energía al usuario';
 COMMENT ON COLUMN profiles.energy_givers IS 'Lista de cosas que dan energía al usuario';
 COMMENT ON COLUMN goals.completed_by_senior_id IS 'ID del Senior que marcó la meta como completada';
@@ -1288,3 +1382,330 @@ COMMENT ON FUNCTION get_pending_calls IS 'Obtiene llamadas pendientes de evaluac
 -- MENSAJE DE CONFIRMACIÓN
 -- =====================================================
 SELECT 'Base de datos CC Tecate optimizada y compatible creada exitosamente! Incluye sistema de llamadas automático.' as status;
+
+-- =====================================================
+-- RPC: Obtener líderes asignados a un senior
+-- =====================================================
+CREATE OR REPLACE FUNCTION get_leaders_for_senior(p_senior_id UUID)
+RETURNS TABLE (
+  id UUID,
+  name TEXT,
+  email TEXT,
+  generation TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id, p.name, p.email, p.generation
+  FROM profiles p
+  WHERE p.role = 'lider' AND p.senior_id = p_senior_id
+  ORDER BY p.name ASC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+COMMENT ON FUNCTION get_leaders_for_senior IS 'Lista los líderes asignados a un senior específico';
+
+-- =====================================================
+-- LEADERBOARD (Funciones robustas con ELSE/COALESCE)
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION calculate_goal_progress_dynamic(
+  p_goal_id UUID,
+  p_user_id UUID
+)
+RETURNS INTEGER AS $$
+DECLARE
+  total_expected_activities INTEGER := 0;
+  total_completed_activities INTEGER := 0;
+  progress_percentage INTEGER := 0;
+  user_generation TEXT;
+  pl1_date DATE;
+  pl3_date DATE;
+  goal_completed BOOLEAN;
+  mechanism_record RECORD;
+  current_date_var DATE;
+  expected_count INTEGER;
+  day_of_week INTEGER;
+  should_include BOOLEAN;
+  days_since_period_start INTEGER;
+  mechanism_start_date DATE;
+  mechanism_end_date DATE;
+  mechanism_completed_count INTEGER;
+BEGIN
+  SELECT g.completed INTO goal_completed FROM goals g WHERE g.id = p_goal_id;
+  IF goal_completed THEN RETURN 100; END IF;
+
+  SELECT p.generation INTO user_generation FROM profiles p WHERE p.id = p_user_id;
+
+  IF user_generation IS NOT NULL THEN
+    SELECT g.pl1_training_date, g.pl3_training_date INTO pl1_date, pl3_date
+    FROM generations g WHERE g.name = user_generation;
+
+    mechanism_start_date := COALESCE(pl1_date + INTERVAL '7 days', CURRENT_DATE);
+    mechanism_end_date   := COALESCE(pl3_date - INTERVAL '7 days', CURRENT_DATE + INTERVAL '30 days');
+  ELSE
+    mechanism_start_date := CURRENT_DATE;
+    mechanism_end_date   := CURRENT_DATE + INTERVAL '30 days';
+  END IF;
+
+  FOR mechanism_record IN
+    SELECT 
+      GREATEST(COALESCE(m.start_date, mechanism_start_date), mechanism_start_date) as start_date,
+      LEAST(COALESCE(m.end_date, mechanism_end_date), mechanism_end_date) as end_date,
+      m.frequency,
+      m.id as mechanism_id
+    FROM mechanisms m
+    WHERE m.goal_id = p_goal_id
+  LOOP
+    current_date_var := mechanism_record.start_date;
+    expected_count := 0;
+
+    WHILE current_date_var <= mechanism_record.end_date LOOP
+      day_of_week := EXTRACT(DOW FROM current_date_var);
+      should_include := FALSE;
+
+      CASE
+        WHEN mechanism_record.frequency = 'daily' THEN
+          should_include := TRUE;
+        WHEN mechanism_record.frequency = 'weekly' THEN
+          should_include := (day_of_week = 1);
+        WHEN mechanism_record.frequency = '2x_week' THEN
+          should_include := (day_of_week = 1 OR day_of_week = 4);
+        WHEN mechanism_record.frequency = '3x_week' THEN
+          should_include := (day_of_week = 1 OR day_of_week = 3 OR day_of_week = 5);
+        WHEN mechanism_record.frequency = '4x_week' THEN
+          should_include := (day_of_week = 1 OR day_of_week = 2 OR day_of_week = 4 OR day_of_week = 5);
+        WHEN mechanism_record.frequency = '5x_week' THEN
+          should_include := (day_of_week BETWEEN 1 AND 5);
+        WHEN mechanism_record.frequency = 'biweekly' THEN
+          days_since_period_start := current_date_var - mechanism_record.start_date;
+          should_include := (days_since_period_start >= 0 AND days_since_period_start % 14 = 0);
+        WHEN mechanism_record.frequency = 'monthly' THEN
+          should_include := (EXTRACT(DAY FROM current_date_var) = EXTRACT(DAY FROM mechanism_record.start_date));
+        WHEN mechanism_record.frequency = 'yearly' THEN
+          should_include := (
+            EXTRACT(MONTH FROM current_date_var) = EXTRACT(MONTH FROM mechanism_record.start_date)
+            AND EXTRACT(DAY FROM current_date_var) = EXTRACT(DAY FROM mechanism_record.start_date)
+          );
+        ELSE
+          should_include := FALSE;
+      END CASE;
+
+      IF should_include THEN
+        expected_count := expected_count + 1;
+      END IF;
+
+      current_date_var := current_date_var + INTERVAL '1 day';
+    END LOOP;
+
+    total_expected_activities := total_expected_activities + expected_count;
+
+    mechanism_completed_count := 0;
+    SELECT COUNT(*) INTO mechanism_completed_count
+    FROM mechanism_completions mc
+    WHERE mc.mechanism_id = mechanism_record.mechanism_id
+      AND mc.user_id = p_user_id
+      AND mc.completed_date >= mechanism_record.start_date
+      AND mc.completed_date <= mechanism_record.end_date;
+
+    total_completed_activities := total_completed_activities + mechanism_completed_count;
+  END LOOP;
+
+  IF total_expected_activities > 0 THEN
+    progress_percentage := ROUND((total_completed_activities::DECIMAL / total_expected_activities::DECIMAL) * 100);
+  END IF;
+
+  RETURN progress_percentage;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION get_leaderboard_data(
+  p_user_id UUID,
+  p_generation_filter TEXT DEFAULT NULL
+)
+RETURNS TABLE (
+  user_id UUID,
+  name TEXT,
+  generation TEXT,
+  goals_completion_percentage DECIMAL(5,2),
+  activities_completion_percentage DECIMAL(5,2),
+  calls_score DECIMAL(3,2),
+  total_score DECIMAL(5,2),
+  rank_position INTEGER
+) AS $$
+DECLARE
+  user_role TEXT;
+  user_generation TEXT;
+BEGIN
+  SELECT p.role, p.generation INTO user_role, user_generation
+  FROM profiles p WHERE p.id = p_user_id;
+
+  IF user_role IS NULL THEN RETURN; END IF;
+
+  IF user_role = 'admin' THEN
+    RETURN QUERY
+    WITH leader_stats AS (
+      SELECT 
+        p.id as user_id,
+        p.name,
+        p.generation,
+        COALESCE((
+          SELECT AVG(CASE WHEN g.completed = true THEN 100 ELSE COALESCE(calculate_goal_progress_dynamic(g.id, p.id), 0) END)
+          FROM goals g WHERE g.user_id = p.id
+        ), 0)::DECIMAL(5,2) as goals_completion_percentage,
+        COALESCE((
+          SELECT (COUNT(uac.activity_id)::DECIMAL / NULLIF(COUNT(a.id), 0)) * 100
+          FROM activities a
+          LEFT JOIN user_activity_completions uac ON uac.activity_id = a.id AND uac.user_id = p.id
+          WHERE a.is_active = true
+        ), 0)::DECIMAL(5,2) as activities_completion_percentage,
+        COALESCE((
+          SELECT AVG(c.score)
+          FROM calls c 
+          WHERE c.leader_id = p.id 
+            AND c.evaluation_status IN ('on_time','late')
+            AND c.score IS NOT NULL
+        ), 0)::DECIMAL(3,2) as calls_score
+      FROM profiles p
+      WHERE p.role = 'lider'
+        AND (p_generation_filter IS NULL OR p.generation = p_generation_filter)
+    )
+    SELECT 
+      ls.user_id,
+      ls.name,
+      ls.generation,
+      ls.goals_completion_percentage,
+      ls.activities_completion_percentage,
+      ls.calls_score,
+      (ls.goals_completion_percentage * 0.4 
+       + ls.activities_completion_percentage * 0.3 
+       + (ls.calls_score * 100/3) * 0.3)::DECIMAL(5,2) as total_score,
+      ROW_NUMBER() OVER (
+        ORDER BY (ls.goals_completion_percentage * 0.4 
+                + ls.activities_completion_percentage * 0.3 
+                + (ls.calls_score * 100/3) * 0.3) DESC
+      )::INTEGER as rank_position
+    FROM leader_stats ls
+    ORDER BY (ls.goals_completion_percentage * 0.4 
+            + ls.activities_completion_percentage * 0.3 
+            + (ls.calls_score * 100/3) * 0.3) DESC;
+
+  ELSE
+    RETURN QUERY
+    WITH leader_stats AS (
+      SELECT 
+        p.id as user_id,
+        p.name,
+        p.generation,
+        COALESCE((
+          SELECT AVG(CASE WHEN g.completed = true THEN 100 ELSE COALESCE(calculate_goal_progress_dynamic(g.id, p.id), 0) END)
+          FROM goals g WHERE g.user_id = p.id
+        ), 0)::DECIMAL(5,2) as goals_completion_percentage,
+        COALESCE((
+          SELECT (COUNT(uac.activity_id)::DECIMAL / NULLIF(COUNT(a.id), 0)) * 100
+          FROM activities a
+          LEFT JOIN user_activity_completions uac ON uac.activity_id = a.id AND uac.user_id = p.id
+          WHERE a.is_active = true
+        ), 0)::DECIMAL(5,2) as activities_completion_percentage,
+        COALESCE((
+          SELECT AVG(c.score) 
+          FROM calls c 
+          WHERE c.leader_id = p.id 
+            AND c.evaluation_status IN ('on_time','late')
+            AND c.score IS NOT NULL
+        ), 0)::DECIMAL(3,2) as calls_score
+      FROM profiles p
+      WHERE p.role = 'lider' AND p.generation = user_generation
+    )
+    SELECT 
+      ls.user_id,
+      ls.name,
+      ls.generation,
+      ls.goals_completion_percentage,
+      ls.activities_completion_percentage,
+      ls.calls_score,
+      (ls.goals_completion_percentage * 0.4 
+       + ls.activities_completion_percentage * 0.3 
+       + (ls.calls_score * 100/3) * 0.3)::DECIMAL(5,2) as total_score,
+      ROW_NUMBER() OVER (
+        ORDER BY (ls.goals_completion_percentage * 0.4 
+                + ls.activities_completion_percentage * 0.3 
+                + (ls.calls_score * 100/3) * 0.3) DESC
+      )::INTEGER as rank_position
+    FROM leader_stats ls
+    ORDER BY (ls.goals_completion_percentage * 0.4 
+            + ls.activities_completion_percentage * 0.3 
+            + (ls.calls_score * 100/3) * 0.3) DESC;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION get_leaderboard_stats(
+  p_user_id UUID,
+  p_generation_filter TEXT DEFAULT NULL
+)
+RETURNS TABLE (
+  total_participants INTEGER,
+  average_score DECIMAL(5,2),
+  leading_generation TEXT,
+  average_goals_completion DECIMAL(5,2)
+) AS $$
+DECLARE
+  user_role TEXT;
+  user_generation TEXT;
+BEGIN
+  SELECT p.role, p.generation INTO user_role, user_generation
+  FROM profiles p WHERE p.id = p_user_id;
+
+  IF user_role IS NULL THEN RETURN; END IF;
+
+  RETURN QUERY
+  WITH leader_stats AS (
+    SELECT 
+      p.generation,
+      COALESCE((
+        SELECT AVG(CASE WHEN g.completed = true THEN 100 ELSE COALESCE(calculate_goal_progress_dynamic(g.id, p.id), 0) END)
+        FROM goals g WHERE g.user_id = p.id
+      ), 0)::DECIMAL(5,2) as goals_completion_percentage,
+      (
+        COALESCE((
+          SELECT AVG(CASE WHEN g.completed = true THEN 100 ELSE COALESCE(calculate_goal_progress_dynamic(g.id, p.id), 0) END)
+          FROM goals g WHERE g.user_id = p.id
+        ), 0) * 0.4 
+        + COALESCE((
+          SELECT (COUNT(uac.activity_id)::DECIMAL / NULLIF(COUNT(a.id), 0)) * 100
+          FROM activities a
+          LEFT JOIN user_activity_completions uac ON uac.activity_id = a.id AND uac.user_id = p.id
+          WHERE a.is_active = true
+        ), 0) * 0.3 
+        + COALESCE((
+          SELECT AVG(c.score) 
+          FROM calls c 
+          WHERE c.leader_id = p.id 
+            AND c.evaluation_status IN ('on_time','late')
+            AND c.score IS NOT NULL
+        ), 0) * (100.0/3.0) * 0.3
+      )::DECIMAL(5,2) as total_score
+    FROM profiles p
+    WHERE p.role = 'lider'
+      AND (
+        (user_role = 'admin' AND (p_generation_filter IS NULL OR p.generation = p_generation_filter))
+        OR 
+        (user_role <> 'admin' AND p.generation = user_generation)
+      )
+  ),
+  generation_stats AS (
+    SELECT generation,
+           COUNT(*) as participant_count,
+           AVG(total_score) as avg_score,
+           AVG(goals_completion_percentage) as avg_goals
+    FROM leader_stats
+    GROUP BY generation
+  )
+  SELECT 
+    (SELECT COUNT(*)::INTEGER FROM leader_stats) as total_participants,
+    COALESCE((SELECT AVG(total_score) FROM leader_stats), 0)::DECIMAL(5,2) as average_score,
+    (SELECT generation FROM generation_stats ORDER BY avg_score DESC NULLS LAST LIMIT 1) as leading_generation,
+    COALESCE((SELECT AVG(goals_completion_percentage) FROM leader_stats), 0)::DECIMAL(5,2) as average_goals_completion;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -17,6 +17,7 @@ import {
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useDashboard } from '@/hooks/useDashboard'
+import { useSelectedUser } from '@/contexts/selected-user'
 import { User } from '@/types'
 
 interface SupabaseUser {
@@ -29,31 +30,28 @@ interface SupabaseUser {
 }
 
 export default function PortalDashboard() {
-  const [user, setUser] = useState<SupabaseUser | null>(null)
-  const [userRole, setUserRole] = useState<string>('lider')
+  const router = useRouter()
+  const { authUserId, authUserRole, selectedUserId } = useSelectedUser()
   const [userName, setUserName] = useState<string>('')
   const [loading, setLoading] = useState(true)
-  const router = useRouter()
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) {
-        router.push('/auth/login')
-        return
-      }
-
-      setUser(user)
-      setUserRole(user.user_metadata?.role || 'lider')
-      setUserName(user.user_metadata?.name || user.email || '')
-      setLoading(false)
+    if (!authUserId) {
+      router.push('/auth/login')
+      return
     }
+    ;(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('name, email')
+        .eq('id', selectedUserId)
+        .single()
+      setUserName(data?.name || data?.email || '')
+      setLoading(false)
+    })()
+  }, [authUserId, selectedUserId, router])
 
-    getUser()
-  }, [router])
-
-  const { stats, recentActivities, loading: dashboardLoading, error } = useDashboard(user?.id || '')
+  const { stats, recentActivities, loading: dashboardLoading, error } = useDashboard(selectedUserId)
 
   if (loading || dashboardLoading) {
     return (
@@ -78,6 +76,7 @@ export default function PortalDashboard() {
     )
   }
 
+  const userRole = authUserRole
   const quickActions = [
     {
       title: 'Gestionar Metas',

@@ -4,43 +4,67 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Clock, Users, Calendar } from 'lucide-react'
-import { User } from '@/types'
+interface AssignedSenior {
+  id: string
+  name: string
+  email: string
+}
+import { supabase } from '@/lib/supabase'
+import { useSelectedUser } from '@/contexts/selected-user'
 
 interface CallScheduleFormProps {
   isOpen: boolean
   onClose: () => void
   onSubmit: (seniorId: string, mondayTime?: string, wednesdayTime?: string, fridayTime?: string) => Promise<void>
-  getSeniors: () => Promise<User[]>
 }
 
-export function CallScheduleForm({ isOpen, onClose, onSubmit, getSeniors }: CallScheduleFormProps) {
-  const [seniors, setSeniors] = useState<User[]>([])
+export function CallScheduleForm({ isOpen, onClose, onSubmit }: CallScheduleFormProps) {
+  const { selectedUserId } = useSelectedUser()
+  const [assignedSenior, setAssignedSenior] = useState<AssignedSenior | null>(null)
   const [selectedSenior, setSelectedSenior] = useState('')
   const [mondayTime, setMondayTime] = useState('')
   const [wednesdayTime, setWednesdayTime] = useState('')
   const [fridayTime, setFridayTime] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  // Cargar seniors disponibles usando la función RPC
+  // Cargar senior asignado al líder seleccionado
   useEffect(() => {
-    const loadSeniors = async () => {
+    const loadAssignedSenior = async () => {
       try {
-        console.log('Loading seniors using RPC function...')
-        const seniorsData = await getSeniors()
-        console.log('Seniors loaded successfully:', seniorsData)
-        setSeniors(seniorsData)
+        if (!selectedUserId) return
+        const { data: leader } = await supabase
+          .from('profiles')
+          .select('senior_id')
+          .eq('id', selectedUserId)
+          .single()
+        if (!leader?.senior_id) {
+          setAssignedSenior(null)
+          setSelectedSenior('')
+          return
+        }
+        const { data: senior } = await supabase
+          .from('profiles')
+          .select('id, name, email')
+          .eq('id', leader.senior_id)
+          .single()
+        if (senior) {
+          setAssignedSenior({ id: senior.id, name: senior.name, email: senior.email })
+          setSelectedSenior(senior.id)
+        } else {
+          setAssignedSenior(null)
+          setSelectedSenior('')
+        }
       } catch (error) {
-        console.error('Error loading seniors:', error)
+        console.error('Error loading assigned senior:', error)
+        setAssignedSenior(null)
+        setSelectedSenior('')
       }
     }
+    if (isOpen) loadAssignedSenior()
+  }, [isOpen, selectedUserId])
 
-    if (isOpen) {
-      loadSeniors()
-    }
-  }, [isOpen, getSeniors])
-
-  // Validar que se hayan seleccionado horarios para los 3 días
-  const isFormValid = selectedSenior && mondayTime && wednesdayTime && fridayTime
+  // Validar que se hayan seleccionado horarios para los 3 días y exista senior asignado
+  const isFormValid = Boolean(selectedSenior) && mondayTime && wednesdayTime && fridayTime
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -133,32 +157,28 @@ export function CallScheduleForm({ isOpen, onClose, onSubmit, getSeniors }: Call
           {!isFormValid && (
             <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
               <p className="text-sm text-amber-800">
-                ⚠️ Debes seleccionar un Senior y configurar horarios para los 3 días (Lunes, Miércoles y Viernes)
+                ⚠️ Configura tus horarios para los 3 días (Lunes, Miércoles y Viernes)
               </p>
             </div>
           )}
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Selección de Senior */}
+            {/* Senior Asignado */}
             <div>
-              <label htmlFor="senior" className="flex items-center gap-2 mb-2 block text-sm font-medium text-gray-700">
+              <label className="flex items-center gap-2 mb-2 block text-sm font-medium text-gray-700">
                 <Users className="h-4 w-4" />
                 Senior Asignado
               </label>
-              <select
-                id="senior"
-                value={selectedSenior}
-                onChange={(e) => setSelectedSenior(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Selecciona tu Senior</option>
-                {seniors.map((senior) => (
-                  <option key={senior.id} value={senior.id}>
-                    {senior.name} ({senior.email})
-                  </option>
-                ))}
-              </select>
+              {assignedSenior ? (
+                <div className="px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-800">
+                  {assignedSenior.name} ({assignedSenior.email})
+                </div>
+              ) : (
+                <div className="px-3 py-2 border border-amber-200 rounded-md bg-amber-50 text-amber-800">
+                  Pronto se mostrará tu Senior asignado
+                </div>
+              )}
             </div>
 
             {/* Horarios de llamadas */}
@@ -245,3 +265,4 @@ export function CallScheduleForm({ isOpen, onClose, onSubmit, getSeniors }: Call
     </div>
   )
 }
+

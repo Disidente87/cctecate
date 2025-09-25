@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useSelectedUser } from '@/contexts/selected-user'
 import { OptimizedCalendar } from '@/components/calendar/OptimizedCalendar'
 import { GoalProgressDashboard } from '@/components/calendar/GoalProgressDashboard'
 
 export default function CalendarPage() {
+  const { selectedUserId, authUserId } = useSelectedUser()
   const [user, setUser] = useState<{ id: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -14,19 +16,9 @@ export default function CalendarPage() {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        // Obtener usuario autenticado
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-        if (authError) {
-          console.error('Auth error:', authError)
-          return
-        }
-        if (!user) {
-          console.warn('User not authenticated')
-          return
-        }
-
-        setUser({ id: user.id })
-        console.log('Calendar page - user loaded:', user.id)
+        const viewUserId = selectedUserId || authUserId
+        if (!viewUserId) return
+        setUser({ id: viewUserId })
       } catch (error) {
         console.error('Error loading user:', error)
       } finally {
@@ -35,7 +27,7 @@ export default function CalendarPage() {
     }
 
     loadUser()
-  }, [])
+  }, [selectedUserId, authUserId])
 
 
   if (loading) {

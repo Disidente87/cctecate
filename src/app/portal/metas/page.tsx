@@ -12,6 +12,7 @@ import {
   TrendingUp
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useSelectedUser } from '@/contexts/selected-user'
 import { getUserGoals, createGoalWithMechanisms, updateGoal, deleteGoal, deleteMechanism } from '@/lib/goals'
 import type { GoalWithMechanisms, Mechanism, MechanismInsert } from '@/types/database'
 import { format } from 'date-fns'
@@ -169,6 +170,7 @@ const frequencyLabels = {
 
 
 export default function MetasPage() {
+  const { selectedUserId, authUserId } = useSelectedUser()
   const [goals, setGoals] = useState<GoalWithMechanisms[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<{ id: string } | null>(null)
@@ -181,15 +183,15 @@ export default function MetasPage() {
   })
   const [editingGoal, setEditingGoal] = useState<string | null>(null)
 
-  // Cargar usuario y metas al montar el componente
+  // Cargar metas del perfil seleccionado
   useEffect(() => {
     const loadUserAndGoals = async () => {
       try {
         setError(null)
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          setUser(user)
-          const userGoals = await getUserGoals(user.id)
+        const viewUserId = selectedUserId || authUserId
+        if (viewUserId) {
+          setUser({ id: viewUserId })
+          const userGoals = await getUserGoals(viewUserId)
           
           // Calcular progreso dinámicamente para cada meta
           const goalsWithProgress = await Promise.all(
@@ -203,7 +205,7 @@ export default function MetasPage() {
               }
               
               // Si no está completada, calcular el progreso real
-              const progressPercentage = await calculateGoalProgress(goal, user.id)
+              const progressPercentage = await calculateGoalProgress(goal, viewUserId)
               return {
                 ...goal,
                 progress_percentage: progressPercentage
@@ -224,7 +226,7 @@ export default function MetasPage() {
     }
 
     loadUserAndGoals()
-  }, [])
+  }, [selectedUserId, authUserId])
 
   const handleAddGoal = async () => {
     if (!newGoal.category || !newGoal.description || newGoal.mechanisms.length < 4 || newGoal.mechanisms.length > 6 || !user) return
