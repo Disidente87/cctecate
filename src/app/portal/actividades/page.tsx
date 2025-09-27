@@ -230,6 +230,7 @@ export default function ActividadesPage() {
                           ? 'bg-green-500 border-green-500 text-white'
                           : 'border-gray-300 hover:border-primary-500'
                       }`}
+                      title={activity.is_completed ? "Hacer clic para desmarcar como completada" : "Hacer clic para marcar como completada"}
                     >
                       {activity.is_completed && (
                         <CheckCircle className="h-4 w-4" />
@@ -278,9 +279,24 @@ export default function ActividadesPage() {
                       {activity.category}
                     </span>
                   </div>
-                  <span className="text-sm font-medium text-green-600">
-                    {activity.points} pts
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium text-green-600">
+                      {activity.points} pts
+                    </span>
+                    <button
+                      onClick={() => handleToggleActivity(activity.id)}
+                      className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                        activity.is_completed
+                          ? 'bg-green-500 border-green-500 text-white'
+                          : 'border-gray-300 hover:border-primary-500'
+                      }`}
+                      title="Hacer clic para desmarcar como completada"
+                    >
+                      {activity.is_completed && (
+                        <CheckCircle className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <CardTitle className="text-lg line-through">
                   {activity.title}

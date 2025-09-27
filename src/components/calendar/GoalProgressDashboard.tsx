@@ -46,12 +46,14 @@ const GoalProgressCard: React.FC<GoalProgressCardProps> = ({ goal }) => {
 
 
   const getStatusText = (progressUntilToday: number) => {
+    if (progressUntilToday >= 100) return '¡Adelantado!'
     if (progressUntilToday >= 70) return 'En buen camino'
     if (progressUntilToday >= 50) return 'Progreso moderado'
     return 'Necesita atención'
   }
 
   const getStatusColor = (progressUntilToday: number) => {
+    if (progressUntilToday >= 100) return 'bg-blue-500'
     if (progressUntilToday >= 70) return 'bg-green-500'
     if (progressUntilToday >= 50) return 'bg-yellow-500'
     return 'bg-red-500'

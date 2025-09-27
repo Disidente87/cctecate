@@ -1109,6 +1109,7 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
             const actualEndDate = endDate < mechanismEndDate ? endDate : mechanismEndDate
             const todayEndDate = today < actualEndDate ? today : actualEndDate
 
+
             let expectedCountUntilToday = 0
             const currentDate = new Date(actualStartDate)
             
@@ -1125,18 +1126,43 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
             expectedUntilToday += expectedCountUntilToday
 
             // Contar actividades completadas hasta hoy
-            const { data: completionsUntilToday } = await supabase
+            // Si hoy es anterior al inicio del mecanismo, contar todas las completadas del mecanismo
+            // Si hoy está dentro del rango, contar solo las completadas hasta hoy
+            let completionsQuery = supabase
               .from('mechanism_completions')
               .select('completed_date')
               .eq('mechanism_id', mechanism.id)
               .eq('user_id', userId)
-              .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
-              .lte('completed_date', format(todayEndDate, 'yyyy-MM-dd'))
+
+            if (today >= actualStartDate) {
+              // Hoy está dentro del rango del mecanismo, filtrar por fechas
+              completionsQuery = completionsQuery
+                .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
+                .lte('completed_date', format(todayEndDate, 'yyyy-MM-dd'))
+            }
+            // Si hoy es anterior al inicio, no filtrar por fechas (contar todas)
+
+            const { data: completionsUntilToday } = await completionsQuery
+
 
             completedUntilToday += completionsUntilToday?.length || 0
           }
 
-          const progressUntilToday = expectedUntilToday > 0 ? (completedUntilToday / expectedUntilToday) * 100 : 0
+
+          // Calcular progreso hasta hoy con lógica especial para actividades adelantadas
+          let progressUntilToday = 0
+          if (expectedUntilToday > 0) {
+            // Caso normal: hay actividades esperadas hasta hoy
+            progressUntilToday = (completedUntilToday / expectedUntilToday) * 100
+          } else if (completedUntilToday > 0) {
+            // Caso especial: no hay actividades esperadas hasta hoy pero se completaron actividades
+            // Esto significa que el usuario está adelantado, mostrar 100% o más
+            progressUntilToday = 100
+          } else {
+            // No hay actividades esperadas ni completadas hasta hoy
+            progressUntilToday = 0
+          }
+
 
 
           return {

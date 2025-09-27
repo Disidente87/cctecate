@@ -95,10 +95,20 @@ const calculateGoalProgress = async (goal: GoalWithMechanisms, userId: string): 
       const actualStartDate = startDate > mechanismStartDate ? startDate : mechanismStartDate
       const actualEndDate = endDate < mechanismEndDate ? endDate : mechanismEndDate
 
-      let expectedCount = 0
-      const currentDate = new Date(actualStartDate)
+      // Normalizar las horas para todas las frecuencias (para incluir el último día)
+      const loopStartDate = new Date(actualStartDate)
+      const loopEndDate = new Date(actualEndDate)
       
-      while (currentDate <= actualEndDate) {
+      // Aplicar normalización para todas las frecuencias que usan días específicos
+      if (['weekly', '2x_week', '3x_week', '4x_week', '5x_week'].includes(mechanism.frequency)) {
+        loopStartDate.setHours(0, 0, 0, 0)
+        loopEndDate.setHours(23, 59, 59, 999)
+      }
+
+      let expectedCount = 0
+      const currentDate = new Date(loopStartDate)
+      
+      while (currentDate <= loopEndDate) {
         const dayOfWeek = currentDate.getDay()
         let shouldInclude = false
 
@@ -107,23 +117,23 @@ const calculateGoalProgress = async (goal: GoalWithMechanisms, userId: string): 
             shouldInclude = true
             break
           case 'weekly':
-            shouldInclude = dayOfWeek === 1 // Lunes
+            shouldInclude = dayOfWeek === 5 // Viernes
             break
           case '2x_week':
-            shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
+            shouldInclude = dayOfWeek === 2 || dayOfWeek === 4 // Mar y Jue
             break
           case '3x_week':
             shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
             break
           case '4x_week':
-            shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
+            shouldInclude = dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 4 || dayOfWeek === 5 // MMMJV
             break
           case '5x_week':
             shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
             break
           case 'biweekly':
             const daysSincePeriodStart = Math.floor((currentDate.getTime() - actualStartDate.getTime()) / (1000 * 60 * 60 * 24))
-            shouldInclude = daysSincePeriodStart % 14 === 0
+            shouldInclude = daysSincePeriodStart >= 0 && daysSincePeriodStart % 14 === 0
             break
         }
 
@@ -163,14 +173,12 @@ const frequencyLabels = {
   '4x_week': '4 veces por semana',
   '5x_week': '5 veces por semana',
   weekly: 'Semanal',
-  biweekly: 'Quincenal',
-  monthly: 'Mensual',
-  yearly: 'Anual'
+  biweekly: 'Quincenal'
 }
 
 
 export default function MetasPage() {
-  const { selectedUserId, authUserId } = useSelectedUser()
+  const { selectedUserId, authUserId, authUserRole, isSenior } = useSelectedUser()
   const [goals, setGoals] = useState<GoalWithMechanisms[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<{ id: string } | null>(null)
@@ -182,6 +190,18 @@ export default function MetasPage() {
     mechanisms: [] as Omit<MechanismInsert, 'id' | 'goal_id' | 'created_at' | 'updated_at'>[]
   })
   const [editingGoal, setEditingGoal] = useState<string | null>(null)
+
+  // Limpiar formulario cuando cambie la vista (senior viendo líder vs sus propios datos)
+  useEffect(() => {
+    setNewGoal({
+      category: '',
+      description: '',
+      mechanisms: []
+    })
+    setShowAddGoal(false)
+    setEditingGoal(null)
+    setError(null)
+  }, [selectedUserId])
 
   // Cargar metas del perfil seleccionado
   useEffect(() => {
@@ -430,21 +450,40 @@ export default function MetasPage() {
 
       {/* Add Goal Button */}
       <div className="mb-6">
-        <Button 
-          onClick={() => setShowAddGoal(true)} 
-          disabled={goalCategories.filter(category => !goals.some(goal => goal.category === category)).length === 0}
-          className="bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
-        >
-          <Plus className="mr-2 h-4 w-4 text-white"/>
-          {goalCategories.filter(category => !goals.some(goal => goal.category === category)).length === 0 
-            ? 'Todas las categorías ocupadas' 
-            : 'Nueva Meta'
-          }
-        </Button>
-        {goalCategories.filter(category => !goals.some(goal => goal.category === category)).length === 0 && (
-          <p className="text-sm text-amber-600 mt-2">
-            Ya tienes una meta en cada categoría disponible. Solo puedes tener una meta por categoría.
-          </p>
+        {isSenior && selectedUserId !== authUserId ? (
+          // Senior viendo datos de un líder - deshabilitar creación de metas
+          <div>
+            <Button 
+              disabled
+              className="bg-gray-400 cursor-not-allowed text-white"
+            >
+              <Plus className="mr-2 h-4 w-4 text-white"/>
+              Nueva Meta
+            </Button>
+            <p className="text-sm text-amber-600 mt-2">
+              No puedes agregar metas para el líder seleccionado
+            </p>
+          </div>
+        ) : (
+          // Usuario normal o senior viendo sus propios datos
+          <div>
+            <Button 
+              onClick={() => setShowAddGoal(true)} 
+              disabled={goalCategories.filter(category => !goals.some(goal => goal.category === category)).length === 0}
+              className="bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              <Plus className="mr-2 h-4 w-4 text-white"/>
+              {goalCategories.filter(category => !goals.some(goal => goal.category === category)).length === 0 
+                ? 'Todas las categorías ocupadas' 
+                : 'Nueva Meta'
+              }
+            </Button>
+            {goalCategories.filter(category => !goals.some(goal => goal.category === category)).length === 0 && (
+              <p className="text-sm text-amber-600 mt-2">
+                Ya tienes una meta en cada categoría disponible. Solo puedes tener una meta por categoría.
+              </p>
+            )}
+          </div>
         )}
       </div>
 
@@ -519,7 +558,7 @@ export default function MetasPage() {
                 <div key={index} className="flex items-center space-x-2 mb-2 p-2 bg-gray-50 rounded">
                   <span className="flex-1 text-sm">{mechanism.description}</span>
                   <span className="text-xs text-gray-500">
-                    ({frequencyLabels[mechanism.frequency]})
+                    ({frequencyLabels[mechanism.frequency as keyof typeof frequencyLabels] || mechanism.frequency})
                   </span>
                   <Button
                     type="button"
@@ -553,8 +592,6 @@ export default function MetasPage() {
                     <option value="5x_week">5 veces por semana</option>
                     <option value="weekly">Semanal</option>
                     <option value="biweekly">Quincenal</option>
-                    <option value="monthly">Mensual</option>
-                    <option value="yearly">Anual</option>
                   </select>
                 </div>
                 <Button
@@ -667,14 +704,16 @@ export default function MetasPage() {
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteGoal(goal.id)}
-                    className=" hover:"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {!(isSenior && selectedUserId !== authUserId) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteGoal(goal.id)}
+                      className=" hover:"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -692,10 +731,10 @@ export default function MetasPage() {
                           {mechanism.description}
                         </span>
                         <span className="text-xs text-gray-500">
-                          ({frequencyLabels[mechanism.frequency]})
+                          ({frequencyLabels[mechanism.frequency as keyof typeof frequencyLabels] || mechanism.frequency})
                         </span>
                       </div>
-                      {editingGoal === goal.id && (
+                      {editingGoal === goal.id && !(isSenior && selectedUserId !== authUserId) && (
                         <Button
                           variant="ghost"
                           size="sm"
