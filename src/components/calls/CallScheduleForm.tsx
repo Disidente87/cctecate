@@ -32,36 +32,37 @@ export function CallScheduleForm({ isOpen, onClose, onSubmit }: CallScheduleForm
     const loadAssignedSenior = async () => {
       try {
         if (!selectedUserId) return
-        const { data: leader } = await supabase
+        const { data: user } = await supabase
           .from('profiles')
-          .select('senior_id')
+          .select('supervisor_id, role')
           .eq('id', selectedUserId)
           .single()
-        if (!leader?.senior_id) {
-          setAssignedSenior(null)
-          setSelectedSenior('')
-          return
+        
+        // Si tiene un supervisor asignado (senior o admin)
+        if (user?.supervisor_id) {
+          const { data: supervisor } = await supabase
+            .from('profiles')
+            .select('id, name, email')
+            .eq('id', user.supervisor_id)
+            .single()
+          if (supervisor) {
+            setAssignedSenior(supervisor)
+            setSelectedSenior(supervisor.id)
+            return
+          }
         }
-        const { data: senior } = await supabase
-          .from('profiles')
-          .select('id, name, email')
-          .eq('id', leader.senior_id)
-          .single()
-        if (senior) {
-          setAssignedSenior({ id: senior.id, name: senior.name, email: senior.email })
-          setSelectedSenior(senior.id)
-        } else {
-          setAssignedSenior(null)
-          setSelectedSenior('')
-        }
+        
+        setAssignedSenior(null)
+        setSelectedSenior('')
       } catch (error) {
-        console.error('Error loading assigned senior:', error)
+        console.error('Error loading assigned senior/admin:', error)
         setAssignedSenior(null)
         setSelectedSenior('')
       }
     }
-    if (isOpen) loadAssignedSenior()
-  }, [isOpen, selectedUserId])
+    
+    loadAssignedSenior()
+  }, [selectedUserId])
 
   // Validar que se hayan seleccionado horarios para los 3 días y exista senior asignado
   const isFormValid = Boolean(selectedSenior) && mondayTime && wednesdayTime && fridayTime

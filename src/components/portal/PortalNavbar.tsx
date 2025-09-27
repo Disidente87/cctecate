@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { 
@@ -19,7 +19,9 @@ import {
   Target,
   Calendar,
   Trophy,
-  Phone
+  Phone,
+  Users,
+  Activity
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
@@ -37,14 +39,43 @@ interface PortalNavbarProps {
 
 export default function PortalNavbar({ user }: PortalNavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [userRole, setUserRole] = useState<string>('lider')
+  const [userProfile, setUserProfile] = useState<{name: string, role: string} | null>(null)
   const router = useRouter()
+
+  // Get user role from profiles table
+  useEffect(() => {
+    const getUserProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('name, role')
+          .eq('id', user.id)
+          .single()
+        
+        if (error) {
+          console.error('Error fetching user profile:', error)
+          return
+        }
+        
+        if (data) {
+          console.log('User profile data:', data)
+          setUserRole(data.role)
+          setUserProfile(data)
+        }
+      } catch (error) {
+        console.error('Error in getUserProfile:', error)
+      }
+    }
+    getUserProfile()
+  }, [user.id])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/')
   }
 
-  const navigation = [
+  const baseNavigation = [
     { name: 'Dashboard', href: '/portal', icon: Home },
     { name: 'Metas', href: '/portal/metas', icon: Target },
     { name: 'Calendario', href: '/portal/calendario', icon: Calendar },
@@ -52,6 +83,15 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
     { name: 'Llamadas', href: '/portal/llamadas', icon: Phone },
     { name: 'Leaderboard', href: '/portal/leaderboard', icon: Trophy },
   ]
+
+  const adminNavigation = [
+    { name: 'Asignación', href: '/portal/asignacion', icon: Users },
+    { name: 'Gestión Actividades', href: '/portal/actividades-admin', icon: Activity },
+  ]
+
+  const navigation = userRole === 'admin' 
+    ? [...baseNavigation, ...adminNavigation]
+    : baseNavigation
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
@@ -91,8 +131,8 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end">
                 <div className="px-3 py-2">
-                  <p className="text-sm font-medium ">{user?.user_metadata?.name || user?.email}</p>
-                  <p className="text-xs ">{user?.user_metadata?.role || 'Usuario'}</p>
+                  <p className="text-sm font-medium ">{userProfile?.name || user?.user_metadata?.name || user?.email}</p>
+                  <p className="text-xs ">{userProfile?.role || userRole || 'Usuario'}</p>
                 </div>
                 <DropdownMenuItem>
                   <Settings className="mr-2 h-4 w-4" />

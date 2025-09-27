@@ -14,8 +14,9 @@ CREATE TABLE profiles (
   name TEXT NOT NULL,
   role TEXT CHECK (role IN ('lider', 'senior', 'admin')) NOT NULL DEFAULT 'lider',
   generation TEXT NOT NULL,
-  -- Senior asignado (nullable: permite registro sin asignación inmediata)
-  senior_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  -- Supervisor asignado (nullable: permite registro sin asignación inmediata)
+  -- Puede ser un senior o un admin
+  supervisor_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
   energy_drainers TEXT[] DEFAULT '{}',
   energy_givers TEXT[] DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -54,7 +55,7 @@ CREATE TABLE goals (
   completed BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  completed_by_senior_id UUID REFERENCES auth.users(id),
+  completed_by_supervisor_id UUID REFERENCES auth.users(id),
   progress_percentage DECIMAL(5,2) DEFAULT 0.00 CHECK (progress_percentage >= 0 AND progress_percentage <= 100),
   target_points INTEGER DEFAULT 100,
   is_completed BOOLEAN DEFAULT false,
@@ -96,7 +97,7 @@ CREATE TABLE activities (
 CREATE TABLE calls (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   leader_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-  senior_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  supervisor_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   scheduled_date TIMESTAMP WITH TIME ZONE NOT NULL,
   status TEXT CHECK (status IN ('scheduled', 'completed', 'rescheduled', 'missed')) DEFAULT 'scheduled',
   -- Nuevos campos para calificaciones
@@ -153,7 +154,7 @@ CREATE TABLE mechanism_completions (
 CREATE TABLE call_schedules (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   leader_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-  senior_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  supervisor_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   -- Horarios de llamadas (3 días por semana: Lunes, Miércoles, Viernes)
   monday_time TIME,
   wednesday_time TIME,
@@ -165,7 +166,7 @@ CREATE TABLE call_schedules (
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(leader_id, senior_id)
+  UNIQUE(leader_id, supervisor_id)
 );
 
 -- =====================================================
@@ -175,16 +176,16 @@ CREATE TABLE call_schedules (
 -- Índices existentes (MANTENER)
 CREATE INDEX idx_profiles_role ON profiles(role);
 CREATE INDEX idx_profiles_generation ON profiles(generation);
-CREATE INDEX idx_profiles_senior_id ON profiles(senior_id);
+CREATE INDEX idx_profiles_supervisor_id ON profiles(supervisor_id);
 CREATE INDEX idx_goals_user_id ON goals(user_id);
 CREATE INDEX idx_goals_category ON goals(category);
-CREATE INDEX idx_goals_completed_by_senior ON goals(completed_by_senior_id);
+CREATE INDEX idx_goals_completed_by_supervisor ON goals(completed_by_supervisor_id);
 CREATE INDEX idx_mechanisms_goal_id ON mechanisms(goal_id);
 CREATE INDEX idx_mechanisms_user_id ON mechanisms(user_id);
 CREATE INDEX idx_activities_unlock_date ON activities(unlock_date);
 CREATE INDEX idx_activities_category ON activities(category);
 CREATE INDEX idx_calls_leader_id ON calls(leader_id);
-CREATE INDEX idx_calls_senior_id ON calls(senior_id);
+CREATE INDEX idx_calls_supervisor_id ON calls(supervisor_id);
 CREATE INDEX idx_calls_scheduled_date ON calls(scheduled_date);
 CREATE INDEX idx_calls_status ON calls(status);
 
@@ -204,7 +205,7 @@ CREATE INDEX idx_calls_auto_generated ON calls (is_auto_generated);
 CREATE INDEX idx_calls_leader_scheduled ON calls (leader_id, scheduled_date);
 CREATE INDEX idx_calls_pending_evaluation ON calls (leader_id, evaluation_status) WHERE evaluation_status = 'pending';
 CREATE INDEX idx_call_schedules_leader ON call_schedules (leader_id);
-CREATE INDEX idx_call_schedules_senior ON call_schedules (senior_id);
+CREATE INDEX idx_call_schedules_supervisor ON call_schedules (supervisor_id);
 CREATE INDEX idx_call_schedules_active ON call_schedules (is_active) WHERE is_active = true;
 
 -- =====================================================
@@ -721,7 +722,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Función para crear programación de llamadas automática
 CREATE OR REPLACE FUNCTION create_call_schedule(
   p_leader_id UUID,
-  p_senior_id UUID,
+  p_supervisor_id UUID,
   p_monday_time TIME,
   p_wednesday_time TIME,
   p_friday_time TIME
@@ -761,7 +762,7 @@ BEGIN
   -- Crear la programación
   INSERT INTO call_schedules (
     leader_id, 
-    senior_id, 
+    supervisor_id, 
     monday_time, 
     wednesday_time, 
     friday_time, 
@@ -769,7 +770,7 @@ BEGIN
     end_date
   ) VALUES (
     p_leader_id, 
-    p_senior_id, 
+    p_supervisor_id, 
     p_monday_time,
     p_wednesday_time,
     p_friday_time,
@@ -810,8 +811,8 @@ BEGIN
     IF v_schedule.monday_time IS NOT NULL AND EXTRACT(DOW FROM v_current_date) = 1 THEN
       -- Combinar la fecha con la hora (se guarda en UTC)
       v_scheduled_datetime := (v_current_date + v_schedule.monday_time)::TIMESTAMP WITH TIME ZONE;
-      INSERT INTO calls (leader_id, senior_id, scheduled_date, call_schedule_id, is_auto_generated)
-      VALUES (v_schedule.leader_id, v_schedule.senior_id, v_scheduled_datetime, p_schedule_id, TRUE)
+      INSERT INTO calls (leader_id, supervisor_id, scheduled_date, call_schedule_id, is_auto_generated)
+      VALUES (v_schedule.leader_id, v_schedule.supervisor_id, v_scheduled_datetime, p_schedule_id, TRUE)
       ON CONFLICT DO NOTHING;
       v_call_count := v_call_count + 1;
     END IF;
@@ -820,8 +821,8 @@ BEGIN
     IF v_schedule.wednesday_time IS NOT NULL AND EXTRACT(DOW FROM v_current_date) = 3 THEN
       -- Combinar la fecha con la hora (se guarda en UTC)
       v_scheduled_datetime := (v_current_date + v_schedule.wednesday_time)::TIMESTAMP WITH TIME ZONE;
-      INSERT INTO calls (leader_id, senior_id, scheduled_date, call_schedule_id, is_auto_generated)
-      VALUES (v_schedule.leader_id, v_schedule.senior_id, v_scheduled_datetime, p_schedule_id, TRUE)
+      INSERT INTO calls (leader_id, supervisor_id, scheduled_date, call_schedule_id, is_auto_generated)
+      VALUES (v_schedule.leader_id, v_schedule.supervisor_id, v_scheduled_datetime, p_schedule_id, TRUE)
       ON CONFLICT DO NOTHING;
       v_call_count := v_call_count + 1;
     END IF;
@@ -830,8 +831,8 @@ BEGIN
     IF v_schedule.friday_time IS NOT NULL AND EXTRACT(DOW FROM v_current_date) = 5 THEN
       -- Combinar la fecha con la hora (se guarda en UTC)
       v_scheduled_datetime := (v_current_date + v_schedule.friday_time)::TIMESTAMP WITH TIME ZONE;
-      INSERT INTO calls (leader_id, senior_id, scheduled_date, call_schedule_id, is_auto_generated)
-      VALUES (v_schedule.leader_id, v_schedule.senior_id, v_scheduled_datetime, p_schedule_id, TRUE)
+      INSERT INTO calls (leader_id, supervisor_id, scheduled_date, call_schedule_id, is_auto_generated)
+      VALUES (v_schedule.leader_id, v_schedule.supervisor_id, v_scheduled_datetime, p_schedule_id, TRUE)
       ON CONFLICT DO NOTHING;
       v_call_count := v_call_count + 1;
     END IF;
@@ -949,7 +950,7 @@ BEGIN
     p.name as senior_name,
     p.email as senior_email
   FROM calls c
-  JOIN profiles p ON p.id = c.senior_id
+  JOIN profiles p ON p.id = c.supervisor_id
   WHERE c.leader_id = p_leader_id
     AND c.evaluation_status = 'pending'
     AND c.scheduled_date > NOW()
@@ -997,7 +998,7 @@ BEGIN
     (c.evaluation_status = 'pending') as is_pending,
     (c.scheduled_date::DATE > CURRENT_DATE) as is_future
   FROM calls c
-  JOIN profiles p ON p.id = c.senior_id
+  JOIN profiles p ON p.id = c.supervisor_id
   WHERE c.leader_id = p_leader_id
     AND c.scheduled_date::DATE BETWEEN p_start_date AND p_end_date
   ORDER BY c.scheduled_date;
@@ -1024,7 +1025,7 @@ BEGIN
     (CURRENT_DATE - c.scheduled_date::DATE) as days_since_scheduled,
     (c.scheduled_date::DATE < CURRENT_DATE) as is_overdue
   FROM calls c
-  JOIN profiles p ON p.id = c.senior_id
+  JOIN profiles p ON p.id = c.supervisor_id
   WHERE c.leader_id = p_leader_id
     AND c.evaluation_status = 'pending'
     AND c.scheduled_date::DATE <= CURRENT_DATE
@@ -1099,7 +1100,19 @@ CREATE POLICY "Leaders can view senior profiles" ON profiles
 -- Política para que los seniors puedan ver a sus líderes asignados
 CREATE POLICY "Seniors can view assigned leaders" ON profiles
     FOR SELECT USING (
-        role = 'lider' AND senior_id = auth.uid()
+        role = 'lider' AND supervisor_id = auth.uid()
+    );
+
+-- Política para que los admins puedan ver a sus usuarios asignados (usando supervisor_id)
+CREATE POLICY "Admins can view assigned users" ON profiles
+    FOR SELECT USING (
+        supervisor_id = auth.uid() AND is_user_admin()
+    );
+
+-- Política para que los admins puedan ver todos los perfiles
+CREATE POLICY "Admins can view all profiles" ON profiles
+    FOR SELECT USING (
+        is_user_admin()
     );
 
 -- Función auxiliar para verificar si el usuario es admin
@@ -1168,8 +1181,14 @@ CREATE POLICY "Seniors can view leaders' goals" ON goals
       SELECT 1
       FROM profiles p
       WHERE p.id = goals.user_id
-        AND p.senior_id = auth.uid()
+        AND p.supervisor_id = auth.uid()
     )
+  );
+
+-- Admins pueden ver todas las metas
+CREATE POLICY "Admins can view all goals" ON goals
+  FOR SELECT USING (
+    is_user_admin()
   );
 
 -- Seniors pueden ver mecanismos de metas de sus líderes
@@ -1180,8 +1199,14 @@ CREATE POLICY "Seniors can view leaders' mechanisms" ON mechanisms
       FROM goals g
       JOIN profiles p ON p.id = g.user_id
       WHERE g.id = mechanisms.goal_id
-        AND p.senior_id = auth.uid()
+        AND p.supervisor_id = auth.uid()
     )
+  );
+
+-- Admins pueden ver todos los mecanismos
+CREATE POLICY "Admins can view all mechanisms" ON mechanisms
+  FOR SELECT USING (
+    is_user_admin()
   );
 
 -- Seniors pueden ver completions de actividades gustosas de sus líderes
@@ -1191,8 +1216,14 @@ CREATE POLICY "Seniors can view leaders' activity completions" ON user_activity_
       SELECT 1
       FROM profiles p
       WHERE p.id = user_activity_completions.user_id
-        AND p.senior_id = auth.uid()
+        AND p.supervisor_id = auth.uid()
     )
+  );
+
+-- Admins pueden ver todas las completions de actividades
+CREATE POLICY "Admins can view all activity completions" ON user_activity_completions
+  FOR SELECT USING (
+    is_user_admin()
   );
 
 -- Seniors pueden ver excepciones de mecanismos de sus líderes
@@ -1204,8 +1235,14 @@ CREATE POLICY "Seniors can view leaders' mechanism exceptions" ON mechanism_sche
       JOIN goals g ON g.id = m.goal_id
       JOIN profiles p ON p.id = g.user_id
       WHERE m.id = mechanism_schedule_exceptions.mechanism_id
-        AND p.senior_id = auth.uid()
+        AND p.supervisor_id = auth.uid()
     )
+  );
+
+-- Admins pueden ver todas las excepciones de mecanismos
+CREATE POLICY "Admins can view all mechanism exceptions" ON mechanism_schedule_exceptions
+  FOR SELECT USING (
+    is_user_admin()
   );
 
 -- Seniors pueden ver completions de mecanismos de sus líderes
@@ -1217,8 +1254,14 @@ CREATE POLICY "Seniors can view leaders' mechanism completions" ON mechanism_com
       JOIN goals g ON g.id = m.goal_id
       JOIN profiles p ON p.id = g.user_id
       WHERE m.id = mechanism_completions.mechanism_id
-        AND p.senior_id = auth.uid()
+        AND p.supervisor_id = auth.uid()
     )
+  );
+
+-- Admins pueden ver todas las completions de mecanismos
+CREATE POLICY "Admins can view all mechanism completions" ON mechanism_completions
+  FOR SELECT USING (
+    is_user_admin()
   );
 
 -- Seniors pueden ver llamadas de sus líderes
@@ -1228,8 +1271,14 @@ CREATE POLICY "Seniors can view leaders' calls" ON calls
       SELECT 1
       FROM profiles p
       WHERE p.id = calls.leader_id
-        AND p.senior_id = auth.uid()
+        AND p.supervisor_id = auth.uid()
     )
+  );
+
+-- Admins pueden ver todas las llamadas
+CREATE POLICY "Admins can view all calls" ON calls
+  FOR SELECT USING (
+    is_user_admin()
   );
 
 -- Seniors pueden ver call schedules de sus líderes (opcional)
@@ -1239,9 +1288,15 @@ CREATE POLICY "Seniors can view leaders' schedules" ON call_schedules
       SELECT 1
       FROM profiles p
       WHERE p.id = call_schedules.leader_id
-        AND p.senior_id = auth.uid()
+        AND p.supervisor_id = auth.uid()
     )
   );
+
+-- Admins pueden ver todos los call schedules
+CREATE POLICY "Admins can view all call schedules" ON call_schedules
+  FOR SELECT USING (
+    is_user_admin()
+    );
 
 CREATE POLICY "Users can delete mechanisms for their goals" ON mechanisms
     FOR DELETE USING (
@@ -1258,13 +1313,13 @@ CREATE POLICY "Authenticated users can view active activities" ON activities
 
 -- Políticas básicas para calls (MANTENER)
 CREATE POLICY "Users can view calls they are involved in" ON calls
-    FOR SELECT USING (auth.uid() = leader_id OR auth.uid() = senior_id);
+    FOR SELECT USING (auth.uid() = leader_id OR auth.uid() = supervisor_id);
 
 CREATE POLICY "Users can create calls" ON calls
-    FOR INSERT WITH CHECK (auth.uid() = leader_id OR auth.uid() = senior_id);
+    FOR INSERT WITH CHECK (auth.uid() = leader_id OR auth.uid() = supervisor_id);
 
 CREATE POLICY "Users can update calls they are involved in" ON calls
-    FOR UPDATE USING (auth.uid() = leader_id OR auth.uid() = senior_id);
+    FOR UPDATE USING (auth.uid() = leader_id OR auth.uid() = supervisor_id);
 
 -- Políticas básicas para user_activity_completions (MANTENER)
 CREATE POLICY "Users can view own activity completions" ON user_activity_completions
@@ -1282,8 +1337,14 @@ CREATE POLICY "Seniors can manage leaders' activity completions" ON user_activit
         EXISTS (
             SELECT 1 FROM profiles p 
             WHERE p.id = user_activity_completions.user_id 
-            AND p.senior_id = auth.uid()
+            AND p.supervisor_id = auth.uid()
         )
+    );
+
+-- Policy for admins to manage all activity completions
+CREATE POLICY "Admins can manage all activity completions" ON user_activity_completions
+    FOR ALL USING (
+        is_user_admin()
     );
 
 -- Políticas básicas para generations (MANTENER)
@@ -1303,13 +1364,25 @@ CREATE POLICY "Seniors can manage leaders' mechanism completions" ON mechanism_c
         EXISTS (
             SELECT 1 FROM profiles p 
             WHERE p.id = mechanism_completions.user_id 
-            AND p.senior_id = auth.uid()
+            AND p.supervisor_id = auth.uid()
         )
+    );
+
+-- Policy for admins to manage all mechanism completions
+CREATE POLICY "Admins can manage all mechanism completions" ON mechanism_completions
+    FOR ALL USING (
+        is_user_admin()
     );
 
 -- Políticas para call_schedules
 CREATE POLICY "Users can manage own call schedules" ON call_schedules 
-  FOR ALL USING (auth.uid() = leader_id OR auth.uid() = senior_id);
+  FOR ALL USING (auth.uid() = leader_id OR auth.uid() = supervisor_id);
+
+-- Policy for admins to manage all call schedules
+CREATE POLICY "Admins can manage all call schedules" ON call_schedules
+    FOR ALL USING (
+        is_user_admin()
+    );
 
 -- =====================================================
 -- DATOS INICIALES (MANTENER EXISTENTES)
@@ -1367,10 +1440,10 @@ COMMENT ON TABLE call_schedules IS 'Programación automática de llamadas (L, M,
 -- Comentarios en las columnas importantes
 COMMENT ON COLUMN profiles.role IS 'Rol del usuario: lider, senior, admin';
 COMMENT ON COLUMN profiles.generation IS 'Generación a la que pertenece el usuario';
-COMMENT ON COLUMN profiles.senior_id IS 'ID del Senior asignado para el líder (nullable)';
+COMMENT ON COLUMN profiles.supervisor_id IS 'ID del Supervisor asignado (senior o admin) para el usuario (nullable)';
 COMMENT ON COLUMN profiles.energy_drainers IS 'Lista de cosas que quitan energía al usuario';
 COMMENT ON COLUMN profiles.energy_givers IS 'Lista de cosas que dan energía al usuario';
-COMMENT ON COLUMN goals.completed_by_senior_id IS 'ID del Senior que marcó la meta como completada';
+COMMENT ON COLUMN goals.completed_by_supervisor_id IS 'ID del Supervisor que marcó la meta como completada';
 COMMENT ON COLUMN goals.progress_percentage IS 'Porcentaje de avance de la meta (0-100)';
 COMMENT ON COLUMN mechanisms.frequency IS 'Frecuencia con la que se realiza el mecanismo: daily, 2x_week, 3x_week, 4x_week, 5x_week, weekly, biweekly, monthly, yearly';
 COMMENT ON COLUMN mechanisms.user_id IS 'ID del usuario propietario del mecanismo';
@@ -1401,12 +1474,12 @@ COMMENT ON FUNCTION get_pending_calls IS 'Obtiene llamadas pendientes de evaluac
 -- =====================================================
 -- MENSAJE DE CONFIRMACIÓN
 -- =====================================================
-SELECT 'Base de datos CC Tecate optimizada y compatible creada exitosamente! Incluye sistema de llamadas automático.' as status;
+SELECT 'Base de datos CC Tecate optimizada y compatible creada exitosamente! Incluye sistema de llamadas automático y jerarquía unificada con supervisor_id.' as status;
 
 -- =====================================================
--- RPC: Obtener líderes asignados a un senior
+-- RPC: Obtener líderes asignados a un supervisor
 -- =====================================================
-CREATE OR REPLACE FUNCTION get_leaders_for_senior(p_senior_id UUID)
+CREATE OR REPLACE FUNCTION get_leaders_for_supervisor(p_supervisor_id UUID)
 RETURNS TABLE (
   id UUID,
   name TEXT,
@@ -1418,12 +1491,58 @@ BEGIN
   SELECT 
     p.id, p.name, p.email, p.generation
   FROM profiles p
-  WHERE p.role = 'lider' AND p.senior_id = p_senior_id
+  WHERE p.role = 'lider' AND p.supervisor_id = p_supervisor_id
   ORDER BY p.name ASC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-COMMENT ON FUNCTION get_leaders_for_senior IS 'Lista los líderes asignados a un senior específico';
+COMMENT ON FUNCTION get_leaders_for_supervisor IS 'Lista los líderes asignados a un supervisor específico';
+
+-- =====================================================
+-- RPC: Obtener usuarios asignados a un supervisor (senior o admin)
+-- =====================================================
+CREATE OR REPLACE FUNCTION get_users_for_supervisor(p_supervisor_id UUID)
+RETURNS TABLE (
+  id UUID,
+  name TEXT,
+  email TEXT,
+  generation TEXT,
+  role TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id, p.name, p.email, p.generation, p.role
+  FROM profiles p
+  WHERE p.supervisor_id = p_supervisor_id
+  ORDER BY p.role, p.name ASC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+COMMENT ON FUNCTION get_users_for_supervisor IS 'Lista los usuarios (líderes y seniors) asignados a un supervisor (senior o admin)';
+
+-- =====================================================
+-- RPC: Obtener el supervisor de un usuario
+-- =====================================================
+CREATE OR REPLACE FUNCTION get_user_supervisor(p_user_id UUID)
+RETURNS TABLE (
+  id UUID,
+  name TEXT,
+  email TEXT,
+  generation TEXT,
+  role TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    s.id, s.name, s.email, s.generation, s.role
+  FROM profiles p
+  JOIN profiles s ON s.id = p.supervisor_id
+  WHERE p.id = p_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+COMMENT ON FUNCTION get_user_supervisor IS 'Obtiene el supervisor (senior o admin) de un usuario específico';
 
 -- =====================================================
 -- LEADERBOARD (Funciones robustas con ELSE/COALESCE)
