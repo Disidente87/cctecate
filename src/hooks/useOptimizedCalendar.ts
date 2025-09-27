@@ -4,6 +4,53 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { format } from 'date-fns'
 import { supabase } from '@/lib/supabase'
 
+// Función utilitaria para calcular si una fecha debe incluirse según la frecuencia
+const shouldIncludeDate = (
+  currentDate: Date, 
+  startDate: Date, 
+  frequency: string
+): boolean => {
+  const dayOfWeek = currentDate.getDay()
+  
+  switch (frequency) {
+    case 'daily':
+      return true
+    case 'weekly':
+      return dayOfWeek === 5 // Viernes
+    case '2x_week':
+      return dayOfWeek === 2 || dayOfWeek === 4 // Mar y Jue
+    case '3x_week':
+      return dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
+    case '4x_week':
+      return dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJ
+    case '5x_week':
+      const include5xWeek = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
+      
+      
+      return include5xWeek
+    case 'biweekly':
+      const daysSincePeriodStart = Math.floor((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+      const shouldInclude = daysSincePeriodStart >= 0 && daysSincePeriodStart % 14 === 0
+      
+      
+      return shouldInclude
+    case 'monthly':
+      if (startDate) {
+        const dayOfMonth = startDate.getDate()
+        return currentDate.getDate() === dayOfMonth
+      }
+      return false
+    case 'yearly':
+      if (startDate) {
+        return currentDate.getMonth() === startDate.getMonth() && 
+               currentDate.getDate() === startDate.getDate()
+      }
+      return false
+    default:
+      return false
+  }
+}
+
 interface CalendarActivity {
   id: string
   mechanismId: string
@@ -187,59 +234,13 @@ const loadBasicCalendarData = async (userId: string, dateRange: { start: Date; e
           const isWithinMechanismPeriod = currentDate >= mechanismStartDate && currentDate <= mechanismEndDate
           
           if (!isWithinMechanismPeriod) {
-            console.log(`Skipping date ${currentDate.toISOString().split('T')[0]} for mechanism ${mechanism.id} - outside mechanism period (${mechanismStartDate.toISOString().split('T')[0]} to ${mechanismEndDate.toISOString().split('T')[0]})`)
             currentDate.setDate(currentDate.getDate() + 1)
             continue
           }
 
-          // Lógica básica de frecuencia
-          let shouldInclude = false
-          const dayOfWeek = currentDate.getDay()
-
-          switch (mechanism.frequency) {
-            case 'daily':
-              shouldInclude = true
-              break
-            case 'weekly':
-              shouldInclude = dayOfWeek === 1 // Lunes
-              break
-            case '2x_week':
-              shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
-              break
-            case '3x_week':
-              shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
-              break
-            case '4x_week':
-              shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 4 // L-J
-              break
-            case '5x_week':
-              shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
-              break
-            case 'biweekly':
-              // Cada 14 días desde start_date
-              if (mechanism.start_date) {
-                const startDate = new Date(mechanism.start_date)
-                const daysDiff = Math.floor((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-                shouldInclude = daysDiff >= 0 && daysDiff % 14 === 0
-              }
-              break
-              case 'monthly':
-                // Mismo día del mes, pero solo si está dentro del período de mecanismos
-                if (mechanism.start_date) {
-                  const mechanismStartDate = new Date(mechanism.start_date)
-                  const dayOfMonth = mechanismStartDate.getDate()
-                  shouldInclude = currentDate.getDate() === dayOfMonth
-                }
-                break
-            case 'yearly':
-              // Mismo día y mes
-              if (mechanism.start_date) {
-                const startDate = new Date(mechanism.start_date)
-                shouldInclude = currentDate.getMonth() === startDate.getMonth() && 
-                               currentDate.getDate() === startDate.getDate()
-              }
-              break
-          }
+          // Usar función utilitaria para calcular frecuencia
+          const mechanismStartDateForFreq = mechanism.start_date ? new Date(mechanism.start_date) : mechanismStartDate
+          const shouldInclude = shouldIncludeDate(currentDate, mechanismStartDateForFreq, mechanism.frequency)
 
           if (shouldInclude) {
             const currentDateStr = format(currentDate, 'yyyy-MM-dd')
@@ -554,34 +555,7 @@ export const useOptimizedCalendar = (userId: string, dateRange: { start: Date; e
           })
           
           while (currentDate <= actualEndDate) {
-            const dayOfWeek = currentDate.getDay()
-            let shouldInclude = false
-
-            switch (mechanism.frequency) {
-              case 'daily':
-                shouldInclude = true
-                break
-              case 'weekly':
-                shouldInclude = dayOfWeek === 1 // Lunes
-                break
-              case '2x_week':
-                shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
-                break
-              case '3x_week':
-                shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
-                break
-              case '4x_week':
-                shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
-                break
-              case '5x_week':
-                shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
-                break
-              case 'biweekly':
-                // Quincenal: cada 14 días desde el inicio del período de mecanismos
-                const daysSincePeriodStart = Math.floor((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-                shouldInclude = daysSincePeriodStart % 14 === 0
-                break
-            }
+            const shouldInclude = shouldIncludeDate(currentDate, startDate, mechanism.frequency)
 
             if (shouldInclude) {
               totalExpected++
@@ -981,268 +955,25 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
   const [goalsProgress, setGoalsProgress] = useState<Record<string, GoalProgress>>({})
   const [isLoading, setIsLoading] = useState(true)
 
-  // Función para actualizar solo una meta específica
-  const updateSingleGoalProgress = useCallback(async (goalId: string) => {
+  // Función unificada para calcular progreso de metas (una o múltiples)
+  const calculateGoalProgress = useCallback(async (targetGoalIds?: string[]) => {
     if (!userId) return
 
-    console.log('DEBUG: Updating single goal progress for:', goalId)
-    
-    try {
-      const { data: goalInfo } = await supabase
-        .from('goals')
-        .select('description')
-        .eq('id', goalId)
-        .single()
-
-      // Calcular progreso simple basado en actividades totales vs completadas
-      console.log('DEBUG: Calculating simple goal progress for goal:', goalId)
-      
-      // Obtener mecanismos de esta meta
-      const { data: mechanisms, error: mechanismsError } = await supabase
-        .from('mechanisms')
-        .select('*')
-        .eq('goal_id', goalId)
-        .eq('user_id', userId)
-
-      if (mechanismsError) {
-        console.error('Error loading mechanisms for goal:', mechanismsError)
-        return
-      }
-
-      // Obtener fechas de generación para calcular el período
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('generation')
-        .eq('id', userId)
-        .single()
-
-      let mechanismStartDate = new Date()
-      let mechanismEndDate = new Date()
-
-      if (profile?.generation) {
-        const { data: generationData } = await supabase
-          .from('generations')
-          .select('pl1_training_date, pl3_training_date')
-          .eq('name', profile.generation)
-          .single()
-
-        if (generationData?.pl1_training_date && generationData?.pl3_training_date) {
-          const pl1Date = new Date(generationData.pl1_training_date)
-          const pl3Date = new Date(generationData.pl3_training_date)
-          
-          // Mecanismos empiezan 1 semana después de PL1
-          mechanismStartDate = new Date(pl1Date)
-          mechanismStartDate.setDate(mechanismStartDate.getDate() + 9)
-          
-          // Mecanismos terminan 1 semana antes de PL3
-          mechanismEndDate = new Date(pl3Date)
-          mechanismEndDate.setDate(mechanismEndDate.getDate() - 7)
-        }
-      }
-
-      // Calcular actividades totales esperadas para esta meta
-      let totalExpectedActivities = 0
-      let totalCompletedActivities = 0
-
-      for (const mechanism of mechanisms || []) {
-        // Calcular cuántas actividades se esperan para este mecanismo
-        const startDate = mechanism.start_date ? new Date(mechanism.start_date) : mechanismStartDate
-        const endDate = mechanism.end_date ? new Date(mechanism.end_date) : mechanismEndDate
-        
-        // Usar el período completo para el cálculo
-        const actualStartDate = startDate > mechanismStartDate ? startDate : mechanismStartDate
-        const actualEndDate = endDate < mechanismEndDate ? endDate : mechanismEndDate
-
-        let expectedCount = 0
-        const currentDate = new Date(actualStartDate)
-        
-        while (currentDate <= actualEndDate) {
-          const dayOfWeek = currentDate.getDay()
-          let shouldInclude = false
-
-          switch (mechanism.frequency) {
-            case 'daily':
-              shouldInclude = true
-              break
-            case 'weekly':
-              shouldInclude = dayOfWeek === 1 // Lunes
-              break
-            case '2x_week':
-              shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
-              break
-            case '3x_week':
-              shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
-              break
-            case '4x_week':
-              shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
-              break
-            case '5x_week':
-              shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
-              break
-            case 'biweekly':
-              const daysSincePeriodStart = Math.floor((currentDate.getTime() - actualStartDate.getTime()) / (1000 * 60 * 60 * 24))
-              shouldInclude = daysSincePeriodStart % 14 === 0
-              break
-          }
-
-          if (shouldInclude) {
-            expectedCount++
-          }
-
-          currentDate.setDate(currentDate.getDate() + 1)
-        }
-
-        totalExpectedActivities += expectedCount
-
-        // Contar actividades completadas para este mecanismo (usar período completo de la generación)
-        const { data: completions } = await supabase
-          .from('mechanism_completions')
-          .select('completed_date')
-          .eq('mechanism_id', mechanism.id)
-          .eq('user_id', userId)
-          .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
-          .lte('completed_date', format(mechanismEndDate, 'yyyy-MM-dd'))
-
-        console.log('DEBUG: Mechanism completions for', mechanism.id, ':', {
-          mechanismId: mechanism.id,
-          actualStartDate: format(actualStartDate, 'yyyy-MM-dd'),
-          mechanismEndDate: format(mechanismEndDate, 'yyyy-MM-dd'),
-          completions: completions?.length || 0,
-          completionDates: completions?.map(c => c.completed_date) || []
-        })
-
-        totalCompletedActivities += completions?.length || 0
-      }
-
-      const progressPercentage = totalExpectedActivities > 0 ? (totalCompletedActivities / totalExpectedActivities) * 100 : 0
-
-      // Calcular progreso esperado hasta hoy
-      const today = new Date()
-      today.setHours(23, 59, 59, 999) // Incluir todo el día de hoy
-      
-      let expectedUntilToday = 0
-      let completedUntilToday = 0
-
-      for (const mechanism of mechanisms || []) {
-        const startDate = mechanism.start_date ? new Date(mechanism.start_date) : mechanismStartDate
-        const endDate = mechanism.end_date ? new Date(mechanism.end_date) : mechanismEndDate
-        
-        const actualStartDate = startDate > mechanismStartDate ? startDate : mechanismStartDate
-        const actualEndDate = endDate < mechanismEndDate ? endDate : mechanismEndDate
-        const todayEndDate = today < actualEndDate ? today : actualEndDate
-
-        let expectedCountUntilToday = 0
-        const currentDate = new Date(actualStartDate)
-        
-        while (currentDate <= todayEndDate) {
-          const dayOfWeek = currentDate.getDay()
-          let shouldInclude = false
-
-          switch (mechanism.frequency) {
-            case 'daily':
-              shouldInclude = true
-              break
-            case 'weekly':
-              shouldInclude = dayOfWeek === 1 // Lunes
-              break
-            case '2x_week':
-              shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
-              break
-            case '3x_week':
-              shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
-              break
-            case '4x_week':
-              shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
-              break
-            case '5x_week':
-              shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
-              break
-            case 'biweekly':
-              const daysSincePeriodStart = Math.floor((currentDate.getTime() - actualStartDate.getTime()) / (1000 * 60 * 60 * 24))
-              shouldInclude = daysSincePeriodStart % 14 === 0
-              break
-          }
-
-          if (shouldInclude) {
-            expectedCountUntilToday++
-          }
-
-          currentDate.setDate(currentDate.getDate() + 1)
-        }
-
-        expectedUntilToday += expectedCountUntilToday
-
-        // Contar actividades completadas hasta hoy
-        const { data: completionsUntilToday } = await supabase
-          .from('mechanism_completions')
-          .select('completed_date')
-          .eq('mechanism_id', mechanism.id)
-          .eq('user_id', userId)
-          .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
-          .lte('completed_date', format(todayEndDate, 'yyyy-MM-dd'))
-
-        completedUntilToday += completionsUntilToday?.length || 0
-      }
-
-      const progressUntilToday = expectedUntilToday > 0 ? (completedUntilToday / expectedUntilToday) * 100 : 0
-
-      console.log('DEBUG: Single goal progress calculation:', {
-        goalId,
-        totalExpectedActivities,
-        totalCompletedActivities,
-        progressPercentage: Math.round(progressPercentage * 100) / 100,
-        expectedUntilToday,
-        completedUntilToday,
-        progressUntilToday: Math.round(progressUntilToday * 100) / 100
-      })
-
-      // Obtener la categoría de la meta
-      const { data: goalData } = await supabase
-        .from('goals')
-        .select('category')
-        .eq('id', goalId)
-        .single()
-
-      // Actualizar solo esta meta en el estado
-      setGoalsProgress(prev => ({
-        ...prev,
-        [goalId]: {
-          goalId,
-          goalDescription: goalInfo?.description || 'Meta sin nombre',
-          category: goalData?.category || 'Sin categoría',
-          totalMechanisms: mechanisms?.length || 0,
-          activeMechanisms: mechanisms?.length || 0,
-          avgProgress: progressPercentage,
-          progressUntilToday: progressUntilToday,
-          mechanismsOnTrack: Math.round(progressPercentage / 100 * (mechanisms?.length || 0)),
-          goalCompletionPredictionDays: null,
-          lastActivityDate: null
-        }
-      }))
-
-    } catch (error) {
-      console.error('Error updating single goal progress:', error)
-    }
-  }, [userId])
-
-  const loadGoalsProgress = useCallback(async () => {
-    if (!userId) return
-
-    setIsLoading(true)
+    console.log('DEBUG: calculateGoalProgress - Starting for userId:', userId, 'goalIds:', targetGoalIds)
     
     try {
       // Si no se especifican goalIds, obtener todas las metas del usuario
-      let targetGoalIds = goalIds
+      let goalIdsToProcess = targetGoalIds
       
-      if (!targetGoalIds) {
+      if (!goalIdsToProcess) {
         const { data: goals } = await supabase
           .from('goals')
           .select('id')
           .eq('user_id', userId)
-        targetGoalIds = goals?.map(g => g.id) || []
+        goalIdsToProcess = goals?.map(g => g.id) || []
       }
 
-      if (targetGoalIds.length === 0) {
+      if (goalIdsToProcess.length === 0) {
         setGoalsProgress({})
         return
       }
@@ -1251,27 +982,24 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
       const { data: goalsData } = await supabase
         .from('goals')
         .select('id, description, category')
-        .in('id', targetGoalIds)
+        .in('id', goalIdsToProcess)
 
       // Calcular progreso para cada meta
-      const progressPromises = targetGoalIds.map(async (goalId) => {
+      const progressPromises = goalIdsToProcess.map(async (goalId) => {
         try {
           const goalInfo = goalsData?.find(g => g.id === goalId)
-          
-          // Calcular progreso simple basado en actividades totales vs completadas
-          console.log('DEBUG: Calculating simple goal progress for goal:', goalId)
           
           // Obtener mecanismos de esta meta
           const { data: mechanisms, error: mechanismsError } = await supabase
             .from('mechanisms')
             .select('*')
             .eq('goal_id', goalId)
-            .eq('user_id', userId)
 
           if (mechanismsError) {
             console.error('Error loading mechanisms for goal:', mechanismsError)
             return { goalId, goalDescription: goalInfo?.description || 'Meta sin nombre', progressData: null }
           }
+
 
           // Obtener fechas de generación para calcular el período
           const { data: profile } = await supabase
@@ -1309,6 +1037,7 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
           let totalCompletedActivities = 0
 
           for (const mechanism of mechanisms || []) {
+            
             // Calcular cuántas actividades se esperan para este mecanismo
             const startDate = mechanism.start_date ? new Date(mechanism.start_date) : mechanismStartDate
             const endDate = mechanism.end_date ? new Date(mechanism.end_date) : mechanismEndDate
@@ -1316,67 +1045,52 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
             // Usar el período completo para el cálculo
             const actualStartDate = startDate > mechanismStartDate ? startDate : mechanismStartDate
             const actualEndDate = endDate < mechanismEndDate ? endDate : mechanismEndDate
+            
+            // Normalizar las horas para todas las frecuencias (para incluir el último día)
+            const loopStartDate = new Date(actualStartDate)
+            const loopEndDate = new Date(actualEndDate)
+            
+            // Aplicar normalización para todas las frecuencias que usan días específicos
+            if (['weekly', '2x_week', '3x_week', '4x_week', '5x_week'].includes(mechanism.frequency)) {
+              loopStartDate.setHours(0, 0, 0, 0)
+              loopEndDate.setHours(23, 59, 59, 999)
+            }
 
             let expectedCount = 0
-            const currentDate = new Date(actualStartDate)
+            const currentDate = new Date(loopStartDate)
+            const expectedDates: string[] = []
             
-            while (currentDate <= actualEndDate) {
-              const dayOfWeek = currentDate.getDay()
-              let shouldInclude = false
+            
+            while (currentDate <= loopEndDate) {
+              
+              const shouldInclude = shouldIncludeDate(currentDate, actualStartDate, mechanism.frequency)
 
-              switch (mechanism.frequency) {
-                case 'daily':
-                  shouldInclude = true
-                  break
-                case 'weekly':
-                  shouldInclude = dayOfWeek === 1 // Lunes
-                  break
-                case '2x_week':
-                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
-                  break
-                case '3x_week':
-                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
-                  break
-                case '4x_week':
-                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
-                  break
-                case '5x_week':
-                  shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
-                  break
-                case 'biweekly':
-                  const daysSincePeriodStart = Math.floor((currentDate.getTime() - actualStartDate.getTime()) / (1000 * 60 * 60 * 24))
-                  shouldInclude = daysSincePeriodStart % 14 === 0
-                  break
-              }
 
               if (shouldInclude) {
                 expectedCount++
+                expectedDates.push(format(currentDate, 'yyyy-MM-dd'))
               }
 
+              
               currentDate.setDate(currentDate.getDate() + 1)
             }
 
+
             totalExpectedActivities += expectedCount
 
-            // Contar actividades completadas para este mecanismo (usar período completo de la generación)
+
+            // Contar actividades completadas para este mecanismo (usar mismo período que para esperadas)
             const { data: completions } = await supabase
               .from('mechanism_completions')
               .select('completed_date')
               .eq('mechanism_id', mechanism.id)
               .eq('user_id', userId)
               .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
-              .lte('completed_date', format(mechanismEndDate, 'yyyy-MM-dd'))
-
-            console.log('DEBUG: LoadGoalsProgress - Mechanism completions for', mechanism.id, ':', {
-              mechanismId: mechanism.id,
-              actualStartDate: format(actualStartDate, 'yyyy-MM-dd'),
-              mechanismEndDate: format(mechanismEndDate, 'yyyy-MM-dd'),
-              completions: completions?.length || 0,
-              completionDates: completions?.map(c => c.completed_date) || []
-            })
+              .lte('completed_date', format(actualEndDate, 'yyyy-MM-dd'))
 
             totalCompletedActivities += completions?.length || 0
           }
+
 
           const progressPercentage = totalExpectedActivities > 0 ? (totalCompletedActivities / totalExpectedActivities) * 100 : 0
 
@@ -1399,33 +1113,7 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
             const currentDate = new Date(actualStartDate)
             
             while (currentDate <= todayEndDate) {
-              const dayOfWeek = currentDate.getDay()
-              let shouldInclude = false
-
-              switch (mechanism.frequency) {
-                case 'daily':
-                  shouldInclude = true
-                  break
-                case 'weekly':
-                  shouldInclude = dayOfWeek === 1 // Lunes
-                  break
-                case '2x_week':
-                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 4 // Lun y Jue
-                  break
-                case '3x_week':
-                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5 // LMV
-                  break
-                case '4x_week':
-                  shouldInclude = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5 // LMMJV
-                  break
-                case '5x_week':
-                  shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5 // L-V
-                  break
-                case 'biweekly':
-                  const daysSincePeriodStart = Math.floor((currentDate.getTime() - actualStartDate.getTime()) / (1000 * 60 * 60 * 24))
-                  shouldInclude = daysSincePeriodStart % 14 === 0
-                  break
-              }
+              const shouldInclude = shouldIncludeDate(currentDate, actualStartDate, mechanism.frequency)
 
               if (shouldInclude) {
                 expectedCountUntilToday++
@@ -1450,36 +1138,20 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
 
           const progressUntilToday = expectedUntilToday > 0 ? (completedUntilToday / expectedUntilToday) * 100 : 0
 
-          console.log('DEBUG: Simple goal progress calculation:', {
-            goalId,
-            totalExpectedActivities,
-            totalCompletedActivities,
-            progressPercentage: Math.round(progressPercentage * 100) / 100,
-            expectedUntilToday,
-            completedUntilToday,
-            progressUntilToday: Math.round(progressUntilToday * 100) / 100
-          })
-
-          const progressData = [{
-            total_mechanisms: mechanisms?.length || 0,
-            active_mechanisms: mechanisms?.length || 0,
-            avg_progress: progressPercentage,
-            progress_until_today: progressUntilToday,
-            mechanisms_on_track: Math.round(progressPercentage / 100 * (mechanisms?.length || 0)),
-            goal_completion_prediction_days: null,
-            last_activity_date: null
-          }]
-          const error = null
-
-          if (error) {
-            console.error('Error calculating goal progress:', error)
-            return { goalId, goalDescription: goalInfo?.description || 'Meta sin nombre', progressData: null }
-          }
 
           return {
             goalId,
             goalDescription: goalInfo?.description || 'Meta sin nombre',
-            progressData: progressData?.[0]
+            category: goalInfo?.category || 'Sin categoría',
+            progressData: {
+              totalMechanisms: mechanisms?.length || 0,
+              activeMechanisms: mechanisms?.length || 0,
+              avgProgress: progressPercentage,
+              progressUntilToday: progressUntilToday,
+              mechanismsOnTrack: Math.round(progressPercentage / 100 * (mechanisms?.length || 0)),
+              goalCompletionPredictionDays: null,
+              lastActivityDate: null
+            }
           }
         } catch (error) {
           console.error('Error in goal progress calculation:', error)
@@ -1490,33 +1162,59 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
       const results = await Promise.all(progressPromises)
       
       const newGoalsProgress: Record<string, GoalProgress> = {}
-      results.forEach(({ goalId, goalDescription, progressData }) => {
+      results.forEach(({ goalId, goalDescription, category, progressData }) => {
         if (progressData) {
-          // Obtener la categoría de la meta
-          const goal = goalsData?.find(g => g.id === goalId)
           newGoalsProgress[goalId] = {
             goalId,
             goalDescription,
-            category: goal?.category || 'Sin categoría',
-            totalMechanisms: progressData.total_mechanisms,
-            activeMechanisms: progressData.active_mechanisms,
-            avgProgress: progressData.avg_progress,
-            progressUntilToday: progressData.progress_until_today,
-            mechanismsOnTrack: progressData.mechanisms_on_track,
-            goalCompletionPredictionDays: progressData.goal_completion_prediction_days,
-            lastActivityDate: progressData.last_activity_date ? new Date(progressData.last_activity_date) : null
+            category,
+            totalMechanisms: progressData.totalMechanisms,
+            activeMechanisms: progressData.activeMechanisms,
+            avgProgress: progressData.avgProgress,
+            progressUntilToday: progressData.progressUntilToday,
+            mechanismsOnTrack: progressData.mechanismsOnTrack,
+            goalCompletionPredictionDays: progressData.goalCompletionPredictionDays,
+            lastActivityDate: progressData.lastActivityDate ? new Date(progressData.lastActivityDate) : null
           }
         }
       })
 
-      console.log('Goals progress loaded for', Object.keys(newGoalsProgress).length, 'goals')
-      setGoalsProgress(newGoalsProgress)
+      // Si se están actualizando metas específicas, preservar las otras metas existentes
+      if (targetGoalIds && targetGoalIds.length > 0) {
+        setGoalsProgress(prev => ({
+          ...prev,
+          ...newGoalsProgress
+        }))
+      } else {
+        // Si se están cargando todas las metas, reemplazar completamente
+        setGoalsProgress(newGoalsProgress)
+      }
+    } catch (error) {
+      console.error('Error calculating goal progress:', error)
+    }
+  }, [userId])
+
+  // Función para cargar progreso inicial (wrapper de calculateGoalProgress)
+  const loadGoalsProgress = useCallback(async () => {
+    if (!userId) return
+
+    console.log('DEBUG: loadGoalsProgress - Starting for userId:', userId)
+    setIsLoading(true)
+    
+    try {
+      await calculateGoalProgress(goalIds)
     } catch (error) {
       console.error('Error loading goals progress:', error)
     } finally {
       setIsLoading(false)
     }
-  }, [userId, goalIds])
+  }, [userId, goalIds, calculateGoalProgress])
+
+  // Función para actualizar una sola meta (wrapper de calculateGoalProgress)
+  const updateSingleGoalProgress = useCallback(async (goalId: string) => {
+    console.log('DEBUG: updateSingleGoalProgress - Updating single goal:', goalId)
+    await calculateGoalProgress([goalId])
+  }, [calculateGoalProgress])
 
   useEffect(() => {
     if (userId) {

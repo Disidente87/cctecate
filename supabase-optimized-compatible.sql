@@ -1276,6 +1276,16 @@ CREATE POLICY "Users can create own activity completions" ON user_activity_compl
 CREATE POLICY "Users can delete own activity completions" ON user_activity_completions
     FOR DELETE USING (auth.uid() = user_id);
 
+-- Policy for seniors to create/update activity completions for their assigned leaders
+CREATE POLICY "Seniors can manage leaders' activity completions" ON user_activity_completions
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM profiles p 
+            WHERE p.id = user_activity_completions.user_id 
+            AND p.senior_id = auth.uid()
+        )
+    );
+
 -- Políticas básicas para generations (MANTENER)
 CREATE POLICY "Everyone can view generations" ON generations
     FOR SELECT USING (true);
@@ -1286,6 +1296,16 @@ CREATE POLICY "Users can manage own exceptions" ON mechanism_schedule_exceptions
 
 CREATE POLICY "Users can manage own completions" ON mechanism_completions 
   FOR ALL USING (auth.uid() = user_id);
+
+-- Policy for seniors to manage mechanism completions for their assigned leaders
+CREATE POLICY "Seniors can manage leaders' mechanism completions" ON mechanism_completions
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM profiles p 
+            WHERE p.id = mechanism_completions.user_id 
+            AND p.senior_id = auth.uid()
+        )
+    );
 
 -- Políticas para call_schedules
 CREATE POLICY "Users can manage own call schedules" ON call_schedules 
@@ -1441,7 +1461,7 @@ BEGIN
     SELECT g.pl1_training_date, g.pl3_training_date INTO pl1_date, pl3_date
     FROM generations g WHERE g.name = user_generation;
 
-    mechanism_start_date := COALESCE(pl1_date + INTERVAL '7 days', CURRENT_DATE);
+    mechanism_start_date := COALESCE(pl1_date + INTERVAL '9 days', CURRENT_DATE);
     mechanism_end_date   := COALESCE(pl3_date - INTERVAL '7 days', CURRENT_DATE + INTERVAL '30 days');
   ELSE
     mechanism_start_date := CURRENT_DATE;
@@ -1474,7 +1494,7 @@ BEGIN
         WHEN mechanism_record.frequency = '3x_week' THEN
           should_include := (day_of_week = 1 OR day_of_week = 3 OR day_of_week = 5);
         WHEN mechanism_record.frequency = '4x_week' THEN
-          should_include := (day_of_week = 1 OR day_of_week = 2 OR day_of_week = 4 OR day_of_week = 5);
+          should_include := (day_of_week = 1 OR day_of_week = 2 OR day_of_week = 3 OR day_of_week = 4);
         WHEN mechanism_record.frequency = '5x_week' THEN
           should_include := (day_of_week BETWEEN 1 AND 5);
         WHEN mechanism_record.frequency = 'biweekly' THEN
@@ -1512,7 +1532,7 @@ BEGIN
   END LOOP;
 
   IF total_expected_activities > 0 THEN
-    progress_percentage := ROUND((total_completed_activities::DECIMAL / total_expected_activities::DECIMAL) * 100);
+    progress_percentage := LEAST(100, ROUND((total_completed_activities::DECIMAL / total_expected_activities::DECIMAL) * 100));
   END IF;
 
   RETURN progress_percentage;
