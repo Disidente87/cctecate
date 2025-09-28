@@ -18,16 +18,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useSelectedUser } from '@/contexts/selected-user'
-import { User } from '@/types'
-
-interface SupabaseUser {
-  id: string
-  email?: string
-  user_metadata?: {
-    role?: string
-    name?: string
-  }
-}
 
 export default function PortalDashboard() {
   const router = useRouter()

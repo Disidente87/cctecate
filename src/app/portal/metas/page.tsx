@@ -178,7 +178,7 @@ const frequencyLabels = {
 
 
 export default function MetasPage() {
-  const { selectedUserId, authUserId, authUserRole, isSenior } = useSelectedUser()
+  const { selectedUserId, authUserId, isSenior } = useSelectedUser()
   const [goals, setGoals] = useState<GoalWithMechanisms[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<{ id: string } | null>(null)

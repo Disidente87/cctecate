@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useSelectedUser } from '@/contexts/selected-user'
 import { OptimizedCalendar } from '@/components/calendar/OptimizedCalendar'
 import { GoalProgressDashboard } from '@/components/calendar/GoalProgressDashboard'
@@ -11,7 +10,6 @@ export default function CalendarPage() {
   const [user, setUser] = useState<{ id: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [refreshGoalsProgress, setRefreshGoalsProgress] = useState<(() => void) | null>(null)
 
   useEffect(() => {
     const loadUser = async () => {
@@ -73,8 +71,7 @@ export default function CalendarPage() {
       <div className="mb-8">
         <h2 className="text-2xl font-semibold text-gray-900 mb-4">Progreso de Metas</h2>
         <GoalProgressDashboard 
-          userId={user.id} 
-          onRefresh={setRefreshGoalsProgress}
+          userId={user.id}
         />
       </div>
 

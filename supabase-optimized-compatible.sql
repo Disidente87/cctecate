@@ -84,7 +84,7 @@ CREATE TABLE activities (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT NOT NULL,
-  unlock_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  unlock_date DATE NOT NULL,
   completed_by UUID[] DEFAULT '{}',
   category TEXT NOT NULL,
   points INTEGER DEFAULT 10,
@@ -1131,6 +1131,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE POLICY "Admins can view all profiles" ON profiles
     FOR SELECT USING (is_user_admin());
 
+-- Política para que los admins puedan actualizar asignaciones de supervisores
+CREATE POLICY "Admins can update supervisor assignments" ON profiles
+    FOR UPDATE USING (is_user_admin())
+    WITH CHECK (is_user_admin());
+
 -- Políticas básicas para goals (MANTENER)
 CREATE POLICY "Users can view own goals" ON goals
     FOR SELECT USING (auth.uid() = user_id);
@@ -1191,6 +1196,24 @@ CREATE POLICY "Admins can view all goals" ON goals
     is_user_admin()
   );
 
+-- Admins pueden crear metas para cualquier usuario
+CREATE POLICY "Admins can create goals for any user" ON goals
+  FOR INSERT WITH CHECK (
+    is_user_admin()
+  );
+
+-- Admins pueden actualizar metas de cualquier usuario
+CREATE POLICY "Admins can update goals for any user" ON goals
+  FOR UPDATE USING (
+    is_user_admin()
+  );
+
+-- Admins pueden eliminar metas de cualquier usuario
+CREATE POLICY "Admins can delete goals for any user" ON goals
+  FOR DELETE USING (
+    is_user_admin()
+  );
+
 -- Seniors pueden ver mecanismos de metas de sus líderes
 CREATE POLICY "Seniors can view leaders' mechanisms" ON mechanisms
   FOR SELECT USING (
@@ -1206,6 +1229,24 @@ CREATE POLICY "Seniors can view leaders' mechanisms" ON mechanisms
 -- Admins pueden ver todos los mecanismos
 CREATE POLICY "Admins can view all mechanisms" ON mechanisms
   FOR SELECT USING (
+    is_user_admin()
+  );
+
+-- Admins pueden crear mecanismos para cualquier usuario
+CREATE POLICY "Admins can create mechanisms for any user" ON mechanisms
+  FOR INSERT WITH CHECK (
+    is_user_admin()
+  );
+
+-- Admins pueden actualizar mecanismos de cualquier usuario
+CREATE POLICY "Admins can update mechanisms for any user" ON mechanisms
+  FOR UPDATE USING (
+    is_user_admin()
+  );
+
+-- Admins pueden eliminar mecanismos de cualquier usuario
+CREATE POLICY "Admins can delete mechanisms for any user" ON mechanisms
+  FOR DELETE USING (
     is_user_admin()
   );
 
@@ -1281,6 +1322,24 @@ CREATE POLICY "Admins can view all calls" ON calls
     is_user_admin()
   );
 
+-- Admins pueden crear llamadas para cualquier usuario
+CREATE POLICY "Admins can create calls for any user" ON calls
+  FOR INSERT WITH CHECK (
+    is_user_admin()
+  );
+
+-- Admins pueden actualizar llamadas de cualquier usuario
+CREATE POLICY "Admins can update calls for any user" ON calls
+  FOR UPDATE USING (
+    is_user_admin()
+  );
+
+-- Admins pueden eliminar llamadas de cualquier usuario
+CREATE POLICY "Admins can delete calls for any user" ON calls
+  FOR DELETE USING (
+    is_user_admin()
+  );
+
 -- Seniors pueden ver call schedules de sus líderes (opcional)
 CREATE POLICY "Seniors can view leaders' schedules" ON call_schedules
   FOR SELECT USING (
@@ -1296,7 +1355,25 @@ CREATE POLICY "Seniors can view leaders' schedules" ON call_schedules
 CREATE POLICY "Admins can view all call schedules" ON call_schedules
   FOR SELECT USING (
     is_user_admin()
-    );
+  );
+
+-- Admins pueden crear call schedules para cualquier usuario
+CREATE POLICY "Admins can create call schedules for any user" ON call_schedules
+  FOR INSERT WITH CHECK (
+    is_user_admin()
+  );
+
+-- Admins pueden actualizar call schedules de cualquier usuario
+CREATE POLICY "Admins can update call schedules for any user" ON call_schedules
+  FOR UPDATE USING (
+    is_user_admin()
+  );
+
+-- Admins pueden eliminar call schedules de cualquier usuario
+CREATE POLICY "Admins can delete call schedules for any user" ON call_schedules
+  FOR DELETE USING (
+    is_user_admin()
+  );
 
 CREATE POLICY "Users can delete mechanisms for their goals" ON mechanisms
     FOR DELETE USING (
@@ -1310,6 +1387,19 @@ CREATE POLICY "Users can delete mechanisms for their goals" ON mechanisms
 -- Políticas básicas para activities (MANTENER)
 CREATE POLICY "Authenticated users can view active activities" ON activities
     FOR SELECT USING (auth.role() = 'authenticated' AND is_active = true);
+
+-- Políticas para administradores gestionar actividades
+CREATE POLICY "Admins can view all activities" ON activities
+    FOR SELECT USING (is_user_admin());
+
+CREATE POLICY "Admins can insert activities" ON activities
+    FOR INSERT WITH CHECK (is_user_admin());
+
+CREATE POLICY "Admins can update activities" ON activities
+    FOR UPDATE USING (is_user_admin());
+
+CREATE POLICY "Admins can delete activities" ON activities
+    FOR DELETE USING (is_user_admin());
 
 -- Políticas básicas para calls (MANTENER)
 CREATE POLICY "Users can view calls they are involved in" ON calls
@@ -1378,11 +1468,6 @@ CREATE POLICY "Admins can manage all mechanism completions" ON mechanism_complet
 CREATE POLICY "Users can manage own call schedules" ON call_schedules 
   FOR ALL USING (auth.uid() = leader_id OR auth.uid() = supervisor_id);
 
--- Policy for admins to manage all call schedules
-CREATE POLICY "Admins can manage all call schedules" ON call_schedules
-    FOR ALL USING (
-        is_user_admin()
-    );
 
 -- =====================================================
 -- DATOS INICIALES (MANTENER EXISTENTES)
@@ -1474,7 +1559,7 @@ COMMENT ON FUNCTION get_pending_calls IS 'Obtiene llamadas pendientes de evaluac
 -- =====================================================
 -- MENSAJE DE CONFIRMACIÓN
 -- =====================================================
-SELECT 'Base de datos CC Tecate optimizada y compatible creada exitosamente! Incluye sistema de llamadas automático y jerarquía unificada con supervisor_id.' as status;
+SELECT 'Base de datos CC Tecate optimizada y compatible creada exitosamente! Incluye sistema de llamadas automático, jerarquía unificada con supervisor_id y políticas completas para administradores.' as status;
 
 -- =====================================================
 -- RPC: Obtener líderes asignados a un supervisor

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useMemo } from 'react'
-import { DndContext, DragEndEvent, DragOverEvent, DragStartEvent, closestCenter } from '@dnd-kit/core'
+import { DndContext, DragEndEvent, DragStartEvent, closestCenter } from '@dnd-kit/core'
 // import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -88,7 +88,7 @@ export function NotionCalendar({ goals, activities, onUpdateActivityDate, onTogg
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
+    const { over } = event
     setDraggedActivity(null)
     
     // Restaurar cursor y selección de texto
@@ -104,7 +104,7 @@ export function NotionCalendar({ goals, activities, onUpdateActivityDate, onTogg
     onUpdateActivityDate?.(draggedActivity.id, newDate)
   }
 
-  const handleDragOver = (_event: DragOverEvent) => {
+  const handleDragOver = () => {
     // Manejar el hover durante el drag
   }
 

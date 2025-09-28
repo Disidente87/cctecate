@@ -19,14 +19,6 @@ interface CalendarActivity {
   isCompleted: boolean
 }
 
-interface MechanismProgress {
-  mechanismId: string
-  totalExpected: number
-  totalCompleted: number
-  progressPercentage: number
-  lastCompletionDate: Date | null
-  currentStreak: number
-}
 
 // Función para generar colores únicos para cada meta
 const getGoalColor = (goalId: string): string => {
@@ -58,7 +50,6 @@ interface CalendarActivityCardProps {
 interface DroppableDayCellProps {
   day: Date
   activities: CalendarActivity[]
-  progressData: Record<string, MechanismProgress>
   pendingUpdates: Set<string>
   onToggleCompletion: (activityId: string, date: Date) => void
   overId: string | null
@@ -68,7 +59,6 @@ interface DroppableDayCellProps {
 const DroppableDayCell: React.FC<DroppableDayCellProps> = ({
   day,
   activities,
-  progressData,
   pendingUpdates,
   onToggleCompletion,
   overId,
@@ -237,7 +227,6 @@ export const OptimizedCalendar: React.FC<OptimizedCalendarProps> = ({
 
   const {
     activitiesByDate,
-    progressData,
     isLoading,
     pendingUpdates,
     moveActivity,
@@ -256,7 +245,7 @@ export const OptimizedCalendar: React.FC<OptimizedCalendarProps> = ({
   }, [activitiesByDate])
 
   // Calcular progreso de metas
-  const { goalsProgress, isLoading: goalsLoading, refreshProgress } = useGoalProgress(userId, goalIds)
+  useGoalProgress(userId, goalIds)
 
   const [activeId, setActiveId] = React.useState<string | null>(null)
   const [draggedActivity, setDraggedActivity] = React.useState<CalendarActivity | null>(null)
@@ -324,9 +313,6 @@ export const OptimizedCalendar: React.FC<OptimizedCalendarProps> = ({
     }
 
     // Siempre llamar a moveActivity, incluso si es el mismo día
-    // La función moveActivity manejará la lógica de regreso al día original
-    const originalDate = draggedActivity.originalDate
-
     // Actualizar la fecha de la actividad solo si es un día diferente
     console.log('Moving activity to different day:', {
       activityId: draggedActivity.id,
@@ -383,7 +369,6 @@ export const OptimizedCalendar: React.FC<OptimizedCalendarProps> = ({
                 key={dateKey}
                 day={day}
                 activities={dayActivities}
-                progressData={progressData}
                 pendingUpdates={pendingUpdates}
                 onToggleCompletion={toggleCompletion}
                 overId={overId}

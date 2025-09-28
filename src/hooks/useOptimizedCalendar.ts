@@ -86,17 +86,6 @@ interface GoalProgress {
   lastActivityDate: Date | null
 }
 
-interface CalendarDataItem {
-  date: string
-  mechanism_id: string
-  mechanism_description: string
-  goal_id: string
-  goal_description: string
-  is_scheduled: boolean
-  is_exception: boolean
-  is_completed: boolean
-  original_date: string
-}
 
 // Función de fallback para cargar datos básicos
 const loadBasicCalendarData = async (userId: string, dateRange: { start: Date; end: Date }) => {
@@ -366,7 +355,7 @@ export const useOptimizedCalendar = (userId: string, dateRange: { start: Date; e
       console.log('DEBUG: Attempting to use RPC function for progress calculation')
       
       // Intentar usar la función RPC optimizada
-      const { data: progressResults, error } = await supabase.rpc('calculate_mechanism_progress', {
+      const { error } = await supabase.rpc('calculate_mechanism_progress', {
         p_mechanism_id: uniqueMechanismIds[0], // Solo para probar si existe la función
         p_user_id: userId
       })
@@ -913,7 +902,7 @@ export const useOptimizedCalendar = (userId: string, dateRange: { start: Date; e
     if (userId) {
       loadCalendarData()
     }
-  }, [userId, dateRange.start.getTime(), dateRange.end.getTime()])
+  }, [userId, dateRange.start.getTime(), dateRange.end.getTime(), loadCalendarData])
 
   useEffect(() => {
     console.log('DEBUG: useEffect for loadProgressData triggered, activities.length:', activities.length)
@@ -923,7 +912,7 @@ export const useOptimizedCalendar = (userId: string, dateRange: { start: Date; e
     } else {
       console.log('DEBUG: No activities, skipping loadProgressData')
     }
-  }, [activities.length])
+  }, [activities, loadProgressData])
 
   // Agrupar actividades por fecha para renderizado
   const activitiesByDate = useMemo(() => {

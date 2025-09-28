@@ -4,7 +4,7 @@ export interface Activity {
   id: string
   title: string
   description: string
-  unlock_date: string
+  unlock_date: string // Formato YYYY-MM-DD
   completed_by: string[]
   category: string
   points: number
@@ -33,7 +33,7 @@ export async function getActivities(): Promise<Activity[]> {
 }
 
 // Obtener actividades con estado de completación para un usuario específico
-export async function getActivitiesWithCompletion(userId: string): Promise<ActivityWithCompletion[]> {
+export async function getActivitiesWithCompletion(userId: string, userRole?: string): Promise<ActivityWithCompletion[]> {
   const { data: activities, error: activitiesError } = await supabase
     .from('activities')
     .select('*')
@@ -45,6 +45,19 @@ export async function getActivitiesWithCompletion(userId: string): Promise<Activ
   }
 
   if (!activities) return []
+
+  // Filtrar actividades basándose en el rol del usuario y fecha de desbloqueo
+  const today = new Date().toISOString().split('T')[0] // Formato YYYY-MM-DD
+
+  const filteredActivities = activities.filter(activity => {
+    // Los administradores pueden ver todas las actividades
+    if (userRole === 'admin') {
+      return true
+    }
+    
+    // Líderes y seniors solo pueden ver actividades desbloqueadas
+    return activity.unlock_date <= today
+  })
 
   // Obtener las actividades completadas por el usuario
   const { data: completedActivities, error: completedError } = await supabase
@@ -60,7 +73,7 @@ export async function getActivitiesWithCompletion(userId: string): Promise<Activ
   const completedActivityIds = new Set(completedActivities?.map(c => c.activity_id) || [])
 
   // Combinar actividades con estado de completación
-  return activities.map(activity => ({
+  return filteredActivities.map(activity => ({
     ...activity,
     is_completed: completedActivityIds.has(activity.id)
   }))

@@ -20,8 +20,7 @@ import {
   Calendar,
   Trophy,
   Phone,
-  Users,
-  Activity
+  Users
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
@@ -86,7 +85,6 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
 
   const adminNavigation = [
     { name: 'Asignación', href: '/portal/asignacion', icon: Users },
-    { name: 'Gestión Actividades', href: '/portal/actividades-admin', icon: Activity },
   ]
 
   const navigation = userRole === 'admin' 
@@ -129,16 +127,16 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
                   </div>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end">
-                <div className="px-3 py-2">
+              <DropdownMenuContent className="w-56 bg-white border border-gray-200 shadow-lg" align="end">
+                <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
                   <p className="text-sm font-medium ">{userProfile?.name || user?.user_metadata?.name || user?.email}</p>
                   <p className="text-xs ">{userProfile?.role || userRole || 'Usuario'}</p>
                 </div>
-                <DropdownMenuItem>
+                <DropdownMenuItem className="hover:bg-gray-50">
                   <Settings className="mr-2 h-4 w-4" />
                   Configuración
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleLogout}>
+                <DropdownMenuItem className="hover:bg-gray-50" onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Cerrar Sesión
                 </DropdownMenuItem>
