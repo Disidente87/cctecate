@@ -9,13 +9,14 @@ export function LeaderSwitcher() {
     setSelectedUserId, 
     assignedUsers, 
     isSenior, 
+    isMasterSenior,
     isAdmin,
     availableGenerations,
     selectedGeneration,
     setSelectedGeneration
   } = useSelectedUser()
   
-  if (!isSenior && !isAdmin) return null
+  if (!isSenior && !isMasterSenior && !isAdmin) return null
 
   // Filter users by selected generation for admin
   const filteredUsers = isAdmin && selectedGeneration !== 'all' 
@@ -51,7 +52,9 @@ export function LeaderSwitcher() {
           
           {filteredUsers.length === 0 && (
             <span className="text-sm text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded">
-              {isAdmin ? 'No hay usuarios asignados aún' : 'No hay líderes asignados aún'}
+              {isAdmin ? 'No hay usuarios asignados aún' : 
+               isMasterSenior ? 'No hay usuarios asignados aún' : 
+               'No hay líderes asignados aún'}
             </span>
           )}
           

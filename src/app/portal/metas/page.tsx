@@ -3,13 +3,18 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { 
   Target, 
   Plus, 
   Edit, 
   Trash2, 
   CheckCircle, 
-  TrendingUp
+  TrendingUp,
+  Save,
+  X
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useSelectedUser } from '@/contexts/selected-user'
@@ -155,7 +160,7 @@ const calculateGoalProgress = async (goal: GoalWithMechanisms, userId: string): 
         .eq('mechanism_id', mechanism.id)
         .eq('user_id', userId)
         .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
-        .lte('completed_date', format(mechanismEndDate, 'yyyy-MM-dd'))
+        // No aplicamos filtro de fecha límite para obtener el total completado
 
       totalCompletedActivities += completions?.length || 0
     }
@@ -193,6 +198,16 @@ export default function MetasPage() {
     mechanisms: [] as Omit<MechanismInsert, 'id' | 'goal_id' | 'created_at' | 'updated_at'>[]
   })
   const [editingGoal, setEditingGoal] = useState<string | null>(null)
+  const [editingGoalData, setEditingGoalData] = useState<{
+    id: string
+    category: string
+    description: string
+    mechanisms: Array<{
+      id: string
+      description: string
+      frequency: string
+    }>
+  } | null>(null)
 
   // Limpiar formulario cuando cambie la vista (senior viendo líder vs sus propios datos)
   useEffect(() => {
@@ -353,6 +368,172 @@ export default function MetasPage() {
           : goal
       ))
     }
+  }
+
+  const handleStartEditing = (goal: GoalWithMechanisms) => {
+    setEditingGoal(goal.id)
+    setEditingGoalData({
+      id: goal.id,
+      category: goal.category,
+      description: goal.description,
+      mechanisms: goal.mechanisms.map(m => ({
+        id: m.id,
+        description: m.description,
+        frequency: m.frequency
+      }))
+    })
+  }
+
+  const handleCancelEditing = () => {
+    setEditingGoal(null)
+    setEditingGoalData(null)
+  }
+
+  const handleSaveEditing = async () => {
+    if (!editingGoalData) return
+
+    // Validar cantidad de mecanismos (mínimo 4, máximo 6)
+    if (editingGoalData.mechanisms.length < 4) {
+      setError('Cada meta debe tener al menos 4 mecanismos de acción')
+      return
+    }
+    
+    if (editingGoalData.mechanisms.length > 6) {
+      setError('Cada meta puede tener máximo 6 mecanismos de acción')
+      return
+    }
+
+    // Validar que todos los mecanismos tengan descripción
+    const emptyMechanisms = editingGoalData.mechanisms.filter(m => !m.description.trim())
+    if (emptyMechanisms.length > 0) {
+      setError('Todos los mecanismos deben tener una descripción')
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError(null) // Limpiar errores previos
+      
+      // Actualizar la meta
+      await updateGoal(editingGoalData.id, {
+        category: editingGoalData.category,
+        description: editingGoalData.description
+      })
+
+      // Obtener la meta original para comparar mecanismos
+      const originalGoal = goals.find(g => g.id === editingGoalData.id)
+      if (!originalGoal) {
+        throw new Error('Meta original no encontrada')
+      }
+
+      // Identificar mecanismos que se eliminaron del formulario
+      const originalMechanismIds = originalGoal.mechanisms.map(m => m.id)
+      const currentMechanismIds = editingGoalData.mechanisms
+        .filter(m => !m.id.startsWith('temp-'))
+        .map(m => m.id)
+      
+      const mechanismsToDelete = originalMechanismIds.filter(id => !currentMechanismIds.includes(id))
+      
+      // Eliminar mecanismos que se removieron del formulario
+      for (const mechanismId of mechanismsToDelete) {
+        await deleteMechanism(mechanismId)
+      }
+
+      // Procesar mecanismos del formulario
+      for (const mechanism of editingGoalData.mechanisms) {
+        if (mechanism.id.startsWith('temp-')) {
+          // Crear nuevo mecanismo
+          const { error } = await supabase
+            .from('mechanisms')
+            .insert({
+              goal_id: editingGoalData.id,
+              user_id: selectedUserId || authUserId,
+              description: mechanism.description,
+              frequency: mechanism.frequency
+            })
+          
+          if (error) {
+            throw error
+          }
+        } else {
+          // Actualizar mecanismo existente
+          const { error } = await supabase
+            .from('mechanisms')
+            .update({
+              description: mechanism.description,
+              frequency: mechanism.frequency
+            })
+            .eq('id', mechanism.id)
+          
+          if (error) {
+            throw error
+          }
+        }
+      }
+
+      // Recargar metas
+      const viewUserId = selectedUserId || authUserId
+      if (viewUserId) {
+        const goalsData = await getUserGoals(viewUserId)
+        setGoals(goalsData)
+      }
+      
+      setEditingGoal(null)
+      setEditingGoalData(null)
+    } catch (error) {
+      console.error('Error saving goal:', error)
+      setError('Error al guardar los cambios')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddMechanismToEditing = () => {
+    if (!editingGoalData) return
+    
+    // Validar que no se excedan los 6 mecanismos
+    if (editingGoalData.mechanisms.length >= 6) {
+      setError('Cada meta puede tener máximo 6 mecanismos de acción')
+      return
+    }
+    
+    setEditingGoalData({
+      ...editingGoalData,
+      mechanisms: [
+        ...editingGoalData.mechanisms,
+        {
+          id: `temp-${Date.now()}`,
+          description: '',
+          frequency: 'daily'
+        }
+      ]
+    })
+  }
+
+  const handleRemoveMechanismFromEditing = (mechanismId: string) => {
+    if (!editingGoalData) return
+    
+    // Validar que no se eliminen mecanismos si quedarían menos de 4
+    if (editingGoalData.mechanisms.length <= 4) {
+      setError('Cada meta debe tener al menos 4 mecanismos de acción')
+      return
+    }
+    
+    setEditingGoalData({
+      ...editingGoalData,
+      mechanisms: editingGoalData.mechanisms.filter(m => m.id !== mechanismId)
+    })
+  }
+
+  const handleUpdateEditingMechanism = (mechanismId: string, field: 'description' | 'frequency', value: string) => {
+    if (!editingGoalData) return
+    
+    setEditingGoalData({
+      ...editingGoalData,
+      mechanisms: editingGoalData.mechanisms.map(m => 
+        m.id === mechanismId ? { ...m, [field]: value } : m
+      )
+    })
   }
 
   const completedGoals = goals.filter(goal => goal.completed).length
@@ -709,14 +890,16 @@ export default function MetasPage() {
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingGoal(editingGoal === goal.id ? null : goal.id)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  {!(isSenior && selectedUserId !== authUserId) && (
+                  {selectedUserId === authUserId && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => editingGoal === goal.id ? handleCancelEditing() : handleStartEditing(goal)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {selectedUserId === authUserId && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -730,6 +913,141 @@ export default function MetasPage() {
               </div>
             </CardHeader>
             <CardContent>
+              
+              {/* Formulario de edición */}
+              {editingGoal === goal.id && editingGoalData && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                  <h4 className="text-sm font-medium mb-3">Editar Meta</h4>
+                  
+                  {/* Editar categoría */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-2">Categoría</label>
+                    <Select
+                      value={editingGoalData.category}
+                      onValueChange={(value) => setEditingGoalData({
+                        ...editingGoalData,
+                        category: value
+                      })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona una categoría" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {goalCategories.map(category => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Editar descripción */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-2">Descripción</label>
+                    <Textarea
+                      value={editingGoalData.description}
+                      onChange={(e) => setEditingGoalData({
+                        ...editingGoalData,
+                        description: e.target.value
+                      })}
+                      placeholder="Describe tu meta..."
+                      rows={3}
+                    />
+                  </div>
+
+                  {/* Editar mecanismos */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <label className="block text-sm font-medium">Mecanismos de Acción</label>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          editingGoalData.mechanisms.length < 4 
+                            ? 'bg-red-100 text-red-700' 
+                            : editingGoalData.mechanisms.length > 6 
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}>
+                          {editingGoalData.mechanisms.length}/6 (mín. 4)
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddMechanismToEditing}
+                        disabled={editingGoalData.mechanisms.length >= 6}
+                        className={editingGoalData.mechanisms.length >= 6 ? 'opacity-50 cursor-not-allowed' : ''}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Agregar
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      {editingGoalData.mechanisms.map((mechanism, index) => (
+                        <div key={mechanism.id} className="flex items-center space-x-2 p-2 bg-white rounded border">
+                          <Input
+                            value={mechanism.description}
+                            onChange={(e) => handleUpdateEditingMechanism(mechanism.id, 'description', e.target.value)}
+                            placeholder="Descripción del mecanismo"
+                            className="flex-1"
+                          />
+                          <Select
+                            value={mechanism.frequency}
+                            onValueChange={(value) => handleUpdateEditingMechanism(mechanism.id, 'frequency', value)}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(frequencyLabels).map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                  {label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveMechanismFromEditing(mechanism.id)}
+                            disabled={editingGoalData.mechanisms.length <= 4}
+                            className={`text-red-600 hover:text-red-700 ${
+                              editingGoalData.mechanisms.length <= 4 
+                                ? 'opacity-50 cursor-not-allowed' 
+                                : ''
+                            }`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Botones de acción */}
+                  <div className="flex justify-end space-x-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleCancelEditing}
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={handleSaveEditing}
+                      disabled={loading}
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      {loading ? 'Guardando...' : 'Guardar'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              
               <div>
                 <h4 className="text-sm font-medium  mb-2">Mecanismos de Acción:</h4>
                 <div className="space-y-2">
@@ -746,7 +1064,7 @@ export default function MetasPage() {
                           ({frequencyLabels[mechanism.frequency as keyof typeof frequencyLabels] || mechanism.frequency})
                         </span>
                       </div>
-                      {editingGoal === goal.id && !(isSenior && selectedUserId !== authUserId) && (
+                      {editingGoal === goal.id && selectedUserId === authUserId && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -760,6 +1078,7 @@ export default function MetasPage() {
                   ))}
                 </div>
               </div>
+              
             </CardContent>
           </Card>
         ))}

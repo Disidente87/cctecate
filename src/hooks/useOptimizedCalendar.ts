@@ -576,7 +576,7 @@ export const useOptimizedCalendar = (userId: string, dateRange: { start: Date; e
             .eq('mechanism_id', mechanismId)
             .eq('user_id', userId)
             .gte('completed_date', format(startDate, 'yyyy-MM-dd'))
-            .lte('completed_date', format(actualEndDate, 'yyyy-MM-dd'))
+            // No aplicamos filtro de fecha límite para obtener el total completado
 
           if (completionsError) {
             console.warn(`Error loading completions for mechanism ${mechanismId}:`, completionsError)
@@ -1088,7 +1088,7 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
               .eq('mechanism_id', mechanism.id)
               .eq('user_id', userId)
               .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
-              .lte('completed_date', format(actualEndDate, 'yyyy-MM-dd'))
+              // No aplicamos filtro de fecha límite para obtener el total completado
 
             totalCompletedActivities += completions?.length || 0
           }
@@ -1127,27 +1127,26 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
 
             expectedUntilToday += expectedCountUntilToday
 
-            // Contar actividades completadas hasta hoy
-            // Si hoy es anterior al inicio del mecanismo, contar todas las completadas del mecanismo
-            // Si hoy está dentro del rango, contar solo las completadas hasta hoy
+            // Contar actividades completadas del mecanismo
+            // Para el cálculo de progreso, contamos todas las completions del mecanismo
+            // independientemente de la fecha, ya que lo que importa es el total completado
             let completionsQuery = supabase
               .from('mechanism_completions')
               .select('completed_date')
               .eq('mechanism_id', mechanism.id)
               .eq('user_id', userId)
 
+            // Solo aplicar filtro de fecha de inicio si el mecanismo ya comenzó
             if (today >= actualStartDate) {
-              // Hoy está dentro del rango del mecanismo, filtrar por fechas
               completionsQuery = completionsQuery
                 .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
-                .lte('completed_date', format(actualEndDate, 'yyyy-MM-dd'))
             }
-            // Si hoy es anterior al inicio, no filtrar por fechas (contar todas)
+            // No aplicamos filtro de fecha límite porque queremos el total completado
 
-            const { data: completionsUntilToday } = await completionsQuery
+            const { data: completionsData } = await completionsQuery
 
-
-            completedUntilToday += completionsUntilToday?.length || 0
+            // Sumar todas las completions del mecanismo (total completado)
+            completedUntilToday += completionsData?.length || 0
           }
 
 

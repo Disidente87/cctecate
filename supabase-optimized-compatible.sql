@@ -1178,9 +1178,40 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Función auxiliar para verificar si el usuario es master_senior
+CREATE OR REPLACE FUNCTION is_user_master_senior()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = auth.uid() 
+    AND role = 'master_senior'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función auxiliar para verificar si el usuario es senior o master_senior
+CREATE OR REPLACE FUNCTION is_user_senior_or_master()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = auth.uid() 
+    AND role IN ('senior', 'master_senior')
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Política para que los admins puedan ver todos los perfiles
 CREATE POLICY "Admins can view all profiles" ON profiles
     FOR SELECT USING (is_user_admin());
+
+-- Política para que los master_senior puedan ver a sus usuarios asignados
+CREATE POLICY "Master Seniors can view assigned users" ON profiles
+    FOR SELECT USING (
+        supervisor_id = auth.uid() 
+        AND role IN ('lider', 'senior')
+    );
 
 -- Política para que los admins puedan actualizar asignaciones de supervisores
 CREATE POLICY "Admins can update supervisor assignments" ON profiles
@@ -1247,6 +1278,17 @@ CREATE POLICY "Admins can view all goals" ON goals
     is_user_admin()
   );
 
+-- Master Seniors pueden ver metas de sus usuarios asignados
+CREATE POLICY "Master Seniors can view assigned users' goals" ON goals
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.id = goals.user_id
+        AND p.supervisor_id = auth.uid()
+        AND p.role IN ('lider', 'senior')
+    )
+  );
+
 -- Admins pueden crear metas para cualquier usuario
 CREATE POLICY "Admins can create goals for any user" ON goals
   FOR INSERT WITH CHECK (
@@ -1283,6 +1325,18 @@ CREATE POLICY "Admins can view all mechanisms" ON mechanisms
     is_user_admin()
   );
 
+-- Master Seniors pueden ver mecanismos de sus usuarios asignados
+CREATE POLICY "Master Seniors can view assigned users' mechanisms" ON mechanisms
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM goals g
+      JOIN profiles p ON p.id = g.user_id
+      WHERE g.id = mechanisms.goal_id
+        AND p.supervisor_id = auth.uid()
+        AND p.role IN ('lider', 'senior')
+    )
+  );
+
 -- Admins pueden crear mecanismos para cualquier usuario
 CREATE POLICY "Admins can create mechanisms for any user" ON mechanisms
   FOR INSERT WITH CHECK (
@@ -1316,6 +1370,17 @@ CREATE POLICY "Seniors can view leaders' activity completions" ON user_activity_
 CREATE POLICY "Admins can view all activity completions" ON user_activity_completions
   FOR SELECT USING (
     is_user_admin()
+  );
+
+-- Master Seniors pueden ver completions de actividades de sus usuarios asignados
+CREATE POLICY "Master Seniors can view assigned users' activity completions" ON user_activity_completions
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.id = user_activity_completions.user_id
+        AND p.supervisor_id = auth.uid()
+        AND p.role IN ('lider', 'senior')
+    )
   );
 
 -- Seniors pueden ver excepciones de mecanismos de sus líderes
@@ -1371,6 +1436,17 @@ CREATE POLICY "Seniors can view leaders' calls" ON calls
 CREATE POLICY "Admins can view all calls" ON calls
   FOR SELECT USING (
     is_user_admin()
+  );
+
+-- Master Seniors pueden ver llamadas de sus usuarios asignados
+CREATE POLICY "Master Seniors can view assigned users' calls" ON calls
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.id = calls.leader_id
+        AND p.supervisor_id = auth.uid()
+        AND p.role IN ('lider', 'senior')
+    )
   );
 
 -- Admins pueden crear llamadas para cualquier usuario
@@ -1515,6 +1591,30 @@ CREATE POLICY "Admins can manage all mechanism completions" ON mechanism_complet
         is_user_admin()
     );
 
+-- Master Seniors pueden ver completions de mecanismos de sus usuarios asignados (líderes y seniors)
+CREATE POLICY "Master Seniors can view assigned users' mechanism completions" ON mechanism_completions
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM profiles p
+      WHERE p.id = mechanism_completions.user_id
+        AND p.supervisor_id = auth.uid()
+        AND p.role IN ('lider', 'senior')
+    )
+  );
+
+-- Master Seniors pueden gestionar completions de mecanismos de sus usuarios asignados (líderes y seniors)
+CREATE POLICY "Master Seniors can manage assigned users' mechanism completions" ON mechanism_completions
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1
+      FROM profiles p
+      WHERE p.id = mechanism_completions.user_id
+        AND p.supervisor_id = auth.uid()
+        AND p.role IN ('lider', 'senior')
+    )
+  );
+
 -- Políticas para call_schedules
 CREATE POLICY "Users can manage own call schedules" ON call_schedules 
   FOR ALL USING (auth.uid() = leader_id OR auth.uid() = supervisor_id);
@@ -1593,6 +1693,10 @@ COMMENT ON TABLE calls IS 'Llamadas de seguimiento entre líderes y seniors';
 COMMENT ON TABLE user_activity_completions IS 'Registro de actividades completadas por usuario';
 COMMENT ON TABLE mechanism_schedule_exceptions IS 'Excepciones a las reglas de recurrencia (movimientos, cancelaciones)';
 COMMENT ON TABLE mechanism_completions IS 'Registro de completions reales de mecanismos';
+
+-- Comentarios para las políticas de master_senior
+COMMENT ON POLICY "Master Seniors can view assigned users' mechanism completions" ON mechanism_completions IS 'Permite a los master seniors ver completions de mecanismos de sus usuarios asignados (líderes y seniors)';
+COMMENT ON POLICY "Master Seniors can manage assigned users' mechanism completions" ON mechanism_completions IS 'Permite a los master seniors gestionar completions de mecanismos de sus usuarios asignados (líderes y seniors)';
 COMMENT ON TABLE call_schedules IS 'Programación automática de llamadas (L, M, V) entre líderes y seniors';
 COMMENT ON TABLE trigger_logs IS 'Logs del sistema para debugging de triggers y funciones';
 

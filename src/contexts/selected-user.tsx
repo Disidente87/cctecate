@@ -18,6 +18,7 @@ interface SelectedUserContextValue {
   setSelectedUserId: (id: string) => void
   assignedUsers: User[]
   isSenior: boolean
+  isMasterSenior: boolean
   isAdmin: boolean
   availableGenerations: string[]
   selectedGeneration: string
@@ -39,7 +40,9 @@ export function SelectedUserProvider({ children, authUserId, authUserRole }: Pro
   const [selectedGeneration, setSelectedGeneration] = useState<string>('all')
 
   const isSenior = authUserRole === 'senior'
+  const isMasterSenior = authUserRole === 'master_senior'
   const isAdmin = authUserRole === 'admin'
+
 
   useEffect(() => {
     setSelectedUserId(authUserId)
@@ -50,15 +53,12 @@ export function SelectedUserProvider({ children, authUserId, authUserRole }: Pro
     let cancelled = false
     ;(async () => {
       if (isSenior) {
-        console.log('[SelectedUserProvider] Loading leaders for senior:', authUserId)
         const { data, error } = await supabase.rpc('get_leaders_for_supervisor', { p_supervisor_id: authUserId })
-        if (error) console.error('[SelectedUserProvider] RPC get_leaders_for_supervisor error:', error)
         if (cancelled) return
         if (error) {
           setAssignedUsers([])
           return
         }
-        console.log('[SelectedUserProvider] Leaders loaded:', data)
         setAssignedUsers((data || []).map((row: { id: string; name: string; email: string; generation: string }) => ({ 
           id: row.id, 
           name: row.name, 
@@ -66,16 +66,35 @@ export function SelectedUserProvider({ children, authUserId, authUserRole }: Pro
           generation: row.generation,
           role: 'lider'
         })))
-      } else if (isAdmin) {
-        console.log('[SelectedUserProvider] Loading users for admin:', authUserId)
-        const { data, error } = await supabase.rpc('get_users_for_supervisor', { p_supervisor_id: authUserId })
-        if (error) console.error('[SelectedUserProvider] RPC get_users_for_supervisor error:', error)
+      } else if (isMasterSenior) {
+        // Usar consulta directa en lugar de RPC para evitar problemas de permisos
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, name, email, generation, role')
+          .eq('supervisor_id', authUserId)
+          .in('role', ['lider', 'senior'])
+          .order('role')
+          .order('name')
+        
         if (cancelled) return
         if (error) {
           setAssignedUsers([])
           return
         }
-        console.log('[SelectedUserProvider] Users loaded:', data)
+        setAssignedUsers((data || []).map((row: { id: string; name: string; email: string; generation: string; role: string }) => ({ 
+          id: row.id, 
+          name: row.name, 
+          email: row.email, 
+          generation: row.generation,
+          role: row.role
+        })))
+      } else if (isAdmin) {
+        const { data, error } = await supabase.rpc('get_users_for_supervisor', { p_supervisor_id: authUserId })
+        if (cancelled) return
+        if (error) {
+          setAssignedUsers([])
+          return
+        }
         setAssignedUsers((data || []).map((row: { id: string; name: string; email: string; generation: string; role: string }) => ({ 
           id: row.id, 
           name: row.name, 
@@ -86,7 +105,7 @@ export function SelectedUserProvider({ children, authUserId, authUserRole }: Pro
       }
     })()
     return () => { cancelled = true }
-  }, [authUserId, isSenior, isAdmin])
+  }, [authUserId, isSenior, isMasterSenior, isAdmin])
 
   // Load available generations for admin
   useEffect(() => {
@@ -100,7 +119,6 @@ export function SelectedUserProvider({ children, authUserId, authUserRole }: Pro
         .in('role', ['lider', 'senior'])
         .order('generation')
       
-      if (error) console.error('[SelectedUserProvider] Error loading generations:', error)
       if (cancelled) return
       
       if (data) {
@@ -118,11 +136,12 @@ export function SelectedUserProvider({ children, authUserId, authUserRole }: Pro
     setSelectedUserId,
     assignedUsers,
     isSenior,
+    isMasterSenior,
     isAdmin,
     availableGenerations,
     selectedGeneration,
     setSelectedGeneration
-  }), [authUserId, authUserRole, selectedUserId, assignedUsers, isSenior, isAdmin, availableGenerations, selectedGeneration])
+  }), [authUserId, authUserRole, selectedUserId, assignedUsers, isSenior, isMasterSenior, isAdmin, availableGenerations, selectedGeneration])
 
   return (
     <SelectedUserContext.Provider value={value}>{children}</SelectedUserContext.Provider>
