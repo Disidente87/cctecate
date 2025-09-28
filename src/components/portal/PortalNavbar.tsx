@@ -20,7 +20,8 @@ import {
   Calendar,
   Trophy,
   Phone,
-  Users
+  Users,
+  GraduationCap
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
@@ -85,6 +86,7 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
 
   const adminNavigation = [
     { name: 'Asignación', href: '/portal/asignacion', icon: Users },
+    { name: 'Generaciones', href: '/portal/generaciones', icon: GraduationCap },
   ]
 
   const navigation = userRole === 'admin' 

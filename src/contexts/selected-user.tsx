@@ -13,7 +13,7 @@ interface User {
 
 interface SelectedUserContextValue {
   authUserId: string
-  authUserRole: 'lider' | 'senior' | 'admin'
+  authUserRole: 'lider' | 'senior' | 'master_senior' | 'admin'
   selectedUserId: string
   setSelectedUserId: (id: string) => void
   assignedUsers: User[]
@@ -29,7 +29,7 @@ const SelectedUserContext = createContext<SelectedUserContextValue | null>(null)
 interface ProviderProps {
   children: React.ReactNode
   authUserId: string
-  authUserRole: 'lider' | 'senior' | 'admin'
+  authUserRole: 'lider' | 'senior' | 'master_senior' | 'admin'
 }
 
 export function SelectedUserProvider({ children, authUserId, authUserRole }: ProviderProps) {

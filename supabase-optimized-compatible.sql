@@ -7,16 +7,18 @@
 -- TABLAS PRINCIPALES (COMPATIBLES CON FUNCIONALIDAD EXISTENTE)
 -- =====================================================
 
--- Tabla de perfiles de usuario (MANTENER ESTRUCTURA EXISTENTE)
+-- Tabla de perfiles de usuario (MANTENER ESTRUCTURA EXISTENTE + PARTICIPACIONES)
 CREATE TABLE profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
-  role TEXT CHECK (role IN ('lider', 'senior', 'admin')) NOT NULL DEFAULT 'lider',
+  role TEXT CHECK (role IN ('lider', 'senior', 'master_senior', 'admin')) NOT NULL DEFAULT 'lider',
   generation TEXT NOT NULL,
   -- Supervisor asignado (nullable: permite registro sin asignación inmediata)
-  -- Puede ser un senior o un admin
+  -- Puede ser un senior, master_senior o admin
   supervisor_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  -- Participación activa del usuario (solo admins pueden cambiar)
+  active_participation_id UUID REFERENCES user_participations(id),
   energy_drainers TEXT[] DEFAULT '{}',
   energy_givers TEXT[] DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -46,10 +48,25 @@ CREATE TABLE generations (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabla de metas (COMPATIBLE + OPTIMIZADA)
+-- Tabla de participaciones de usuarios (NUEVA - SISTEMA DE PARTICIPACIONES)
+CREATE TABLE user_participations (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  generation_id UUID REFERENCES generations(id) NOT NULL,
+  role TEXT CHECK (role IN ('lider', 'senior', 'master_senior', 'admin')) NOT NULL,
+  status TEXT CHECK (status IN ('active', 'completed', 'inactive')) DEFAULT 'active',
+  participation_number INTEGER NOT NULL, -- 1, 2, 3... para ordenar participaciones
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, generation_id, role) -- Un usuario solo puede ser lider/senior una vez por generación
+);
+
+-- Tabla de metas (COMPATIBLE + OPTIMIZADA + PARTICIPACIONES)
 CREATE TABLE goals (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  -- Participación específica a la que pertenece esta meta
+  user_participation_id UUID REFERENCES user_participations(id) ON DELETE CASCADE,
   category TEXT NOT NULL,
   description TEXT NOT NULL,
   completed BOOLEAN DEFAULT FALSE,
@@ -62,10 +79,12 @@ CREATE TABLE goals (
   UNIQUE(user_id, category)
 );
 
--- Tabla de mecanismos (OPTIMIZADA + COMPATIBLE)
+-- Tabla de mecanismos (OPTIMIZADA + COMPATIBLE + PARTICIPACIONES)
 CREATE TABLE mechanisms (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   goal_id UUID REFERENCES goals(id) ON DELETE CASCADE NOT NULL,
+  -- Participación específica a la que pertenece este mecanismo
+  user_participation_id UUID REFERENCES user_participations(id) ON DELETE CASCADE,
   description TEXT NOT NULL,
   frequency VARCHAR(20) NOT NULL DEFAULT 'daily',
   user_id UUID NOT NULL REFERENCES auth.users(id),
@@ -177,17 +196,27 @@ CREATE TABLE call_schedules (
 CREATE INDEX idx_profiles_role ON profiles(role);
 CREATE INDEX idx_profiles_generation ON profiles(generation);
 CREATE INDEX idx_profiles_supervisor_id ON profiles(supervisor_id);
+CREATE INDEX idx_profiles_active_participation ON profiles(active_participation_id);
 CREATE INDEX idx_goals_user_id ON goals(user_id);
 CREATE INDEX idx_goals_category ON goals(category);
 CREATE INDEX idx_goals_completed_by_supervisor ON goals(completed_by_supervisor_id);
+CREATE INDEX idx_goals_participation_id ON goals(user_participation_id);
 CREATE INDEX idx_mechanisms_goal_id ON mechanisms(goal_id);
 CREATE INDEX idx_mechanisms_user_id ON mechanisms(user_id);
+CREATE INDEX idx_mechanisms_participation_id ON mechanisms(user_participation_id);
 CREATE INDEX idx_activities_unlock_date ON activities(unlock_date);
 CREATE INDEX idx_activities_category ON activities(category);
 CREATE INDEX idx_calls_leader_id ON calls(leader_id);
 CREATE INDEX idx_calls_supervisor_id ON calls(supervisor_id);
 CREATE INDEX idx_calls_scheduled_date ON calls(scheduled_date);
 CREATE INDEX idx_calls_status ON calls(status);
+
+-- Índices para participaciones (NUEVOS)
+CREATE INDEX idx_user_participations_user_id ON user_participations(user_id);
+CREATE INDEX idx_user_participations_generation_id ON user_participations(generation_id);
+CREATE INDEX idx_user_participations_role ON user_participations(role);
+CREATE INDEX idx_user_participations_status ON user_participations(status);
+CREATE INDEX idx_user_participations_active ON user_participations(user_id, status) WHERE status = 'active';
 
 -- Índices optimizados para calendario (NUEVOS)
 CREATE INDEX idx_mechanisms_user_goal ON mechanisms (user_id, goal_id);
@@ -244,6 +273,11 @@ CREATE TRIGGER update_mechanism_schedule_exceptions_updated_at BEFORE UPDATE ON 
 CREATE TRIGGER update_call_schedules_updated_at BEFORE UPDATE ON call_schedules
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Trigger para user_participations
+CREATE TRIGGER update_user_participations_updated_at 
+  BEFORE UPDATE ON user_participations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- Trigger para calcular automáticamente start_date y end_date de mecanismos
 CREATE OR REPLACE FUNCTION set_mechanism_dates()
 RETURNS TRIGGER AS $$
@@ -269,18 +303,34 @@ CREATE TRIGGER set_mechanism_dates_trigger
 -- FUNCIONES DE NEGOCIO (MANTENER EXISTENTES + NUEVAS)
 -- =====================================================
 
--- Función para crear perfil automáticamente (MANTENER)
+-- Función para crear perfil automáticamente (SIMPLIFICADA - SOLO PERFIL BÁSICO)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_user_role TEXT;
+  v_generation_name TEXT;
 BEGIN
+  -- Obtener datos de los metadatos del usuario
+  v_user_role := COALESCE(NEW.raw_user_meta_data->>'role', 'lider');
+  v_generation_name := COALESCE(NEW.raw_user_meta_data->>'generation', 'C1');
+  
+  -- Solo crear el perfil básico (sin participaciones por ahora)
   INSERT INTO public.profiles (id, email, name, role, generation)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'name', NEW.email),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'lider'),
-    COALESCE(NEW.raw_user_meta_data->>'generation', 'C1')
+    v_user_role,
+    v_generation_name
   );
+  
+  RETURN NEW;
+EXCEPTION
+  WHEN unique_violation THEN
+    -- Si el perfil ya existe, no hacer nada
+    RETURN NEW;
+  WHEN OTHERS THEN
+    -- Si hay cualquier error, no fallar el registro de auth.users
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -1071,6 +1121,7 @@ ALTER TABLE user_activity_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mechanism_schedule_exceptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mechanism_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE call_schedules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_participations ENABLE ROW LEVEL SECURITY;
 
 -- Políticas básicas para profiles (MANTENER)
 CREATE POLICY "Users can view own profile" ON profiles
@@ -1373,7 +1424,7 @@ CREATE POLICY "Admins can update call schedules for any user" ON call_schedules
 CREATE POLICY "Admins can delete call schedules for any user" ON call_schedules
   FOR DELETE USING (
     is_user_admin()
-  );
+    );
 
 CREATE POLICY "Users can delete mechanisms for their goals" ON mechanisms
     FOR DELETE USING (
@@ -1468,6 +1519,27 @@ CREATE POLICY "Admins can manage all mechanism completions" ON mechanism_complet
 CREATE POLICY "Users can manage own call schedules" ON call_schedules 
   FOR ALL USING (auth.uid() = leader_id OR auth.uid() = supervisor_id);
 
+-- Políticas para user_participations (SISTEMA DE PARTICIPACIONES)
+-- Los usuarios pueden ver sus propias participaciones
+CREATE POLICY "Users can view own participations" ON user_participations
+  FOR SELECT USING (user_id = auth.uid());
+
+-- Los admins pueden ver todas las participaciones
+CREATE POLICY "Admins can view all participations" ON user_participations
+  FOR SELECT USING (is_user_admin());
+
+-- Solo admins pueden crear participaciones
+CREATE POLICY "Admins can create participations" ON user_participations
+  FOR INSERT WITH CHECK (is_user_admin());
+
+-- Solo admins pueden actualizar participaciones
+CREATE POLICY "Admins can update participations" ON user_participations
+  FOR UPDATE USING (is_user_admin());
+
+-- Solo admins pueden eliminar participaciones
+CREATE POLICY "Admins can delete participations" ON user_participations
+  FOR DELETE USING (is_user_admin());
+
 
 -- =====================================================
 -- DATOS INICIALES (MANTENER EXISTENTES)
@@ -1511,25 +1583,33 @@ INSERT INTO activities (title, description, unlock_date, category, points) VALUE
 -- =====================================================
 
 -- Comentarios en las tablas
-COMMENT ON TABLE profiles IS 'Perfiles de usuario que extienden auth.users';
+COMMENT ON TABLE profiles IS 'Perfiles de usuario que extienden auth.users + SISTEMA DE PARTICIPACIONES';
 COMMENT ON TABLE generations IS 'Generaciones del programa CC Tecate con fechas de registro y entrenamientos';
-COMMENT ON TABLE goals IS 'Metas personales de los usuarios - UNA META POR CATEGORÍA';
-COMMENT ON TABLE mechanisms IS 'Mecanismos de acción para alcanzar las metas - 4-6 POR META + OPTIMIZADO PARA CALENDARIO';
+COMMENT ON TABLE user_participations IS 'Participaciones de usuarios en diferentes generaciones con roles específicos - SOLO ADMINS PUEDEN GESTIONAR';
+COMMENT ON TABLE goals IS 'Metas personales de los usuarios - UNA META POR CATEGORÍA + VINCULADAS A PARTICIPACIONES';
+COMMENT ON TABLE mechanisms IS 'Mecanismos de acción para alcanzar las metas - 4-6 POR META + OPTIMIZADO PARA CALENDARIO + VINCULADOS A PARTICIPACIONES';
 COMMENT ON TABLE activities IS 'Actividades gustosas semanales';
 COMMENT ON TABLE calls IS 'Llamadas de seguimiento entre líderes y seniors';
 COMMENT ON TABLE user_activity_completions IS 'Registro de actividades completadas por usuario';
 COMMENT ON TABLE mechanism_schedule_exceptions IS 'Excepciones a las reglas de recurrencia (movimientos, cancelaciones)';
 COMMENT ON TABLE mechanism_completions IS 'Registro de completions reales de mecanismos';
 COMMENT ON TABLE call_schedules IS 'Programación automática de llamadas (L, M, V) entre líderes y seniors';
+COMMENT ON TABLE trigger_logs IS 'Logs del sistema para debugging de triggers y funciones';
 
 -- Comentarios en las columnas importantes
-COMMENT ON COLUMN profiles.role IS 'Rol del usuario: lider, senior, admin';
+COMMENT ON COLUMN profiles.role IS 'Rol del usuario: lider, senior, admin (sincronizado con participaciones activas)';
 COMMENT ON COLUMN profiles.generation IS 'Generación a la que pertenece el usuario';
 COMMENT ON COLUMN profiles.supervisor_id IS 'ID del Supervisor asignado (senior o admin) para el usuario (nullable)';
+COMMENT ON COLUMN profiles.active_participation_id IS 'ID de la participación activa del usuario (solo admins pueden cambiar)';
 COMMENT ON COLUMN profiles.energy_drainers IS 'Lista de cosas que quitan energía al usuario';
 COMMENT ON COLUMN profiles.energy_givers IS 'Lista de cosas que dan energía al usuario';
+COMMENT ON COLUMN user_participations.participation_number IS 'Número secuencial de participación del usuario (1, 2, 3...)';
+COMMENT ON COLUMN user_participations.status IS 'Estado de la participación: active, completed, inactive';
+COMMENT ON COLUMN user_participations.role IS 'Rol específico en esta participación: lider, senior, admin';
+COMMENT ON COLUMN goals.user_participation_id IS 'ID de la participación específica a la que pertenece esta meta';
 COMMENT ON COLUMN goals.completed_by_supervisor_id IS 'ID del Supervisor que marcó la meta como completada';
 COMMENT ON COLUMN goals.progress_percentage IS 'Porcentaje de avance de la meta (0-100)';
+COMMENT ON COLUMN mechanisms.user_participation_id IS 'ID de la participación específica a la que pertenece este mecanismo';
 COMMENT ON COLUMN mechanisms.frequency IS 'Frecuencia con la que se realiza el mecanismo: daily, 2x_week, 3x_week, 4x_week, 5x_week, weekly, biweekly, monthly, yearly';
 COMMENT ON COLUMN mechanisms.user_id IS 'ID del usuario propietario del mecanismo';
 COMMENT ON COLUMN mechanisms.start_date IS 'Fecha de inicio del mecanismo (para lógica de recurrencia)';
@@ -1556,10 +1636,587 @@ COMMENT ON FUNCTION get_next_call IS 'Obtiene la próxima llamada pendiente de u
 COMMENT ON FUNCTION get_calls_calendar_view IS 'Genera vista del calendario de llamadas con colores por estado';
 COMMENT ON FUNCTION get_pending_calls IS 'Obtiene llamadas pendientes de evaluación';
 
+-- Comentarios en las funciones del sistema de participaciones
+COMMENT ON FUNCTION get_user_current_role IS 'Obtiene el rol actual del usuario desde su participación activa';
+COMMENT ON FUNCTION get_user_active_participation IS 'Obtiene la participación activa de un usuario con información de generación';
+COMMENT ON FUNCTION change_user_active_participation IS 'Cambia la participación activa de un usuario (solo admins)';
+COMMENT ON FUNCTION create_user_participation IS 'Crea una nueva participación para un usuario (solo admins)';
+COMMENT ON FUNCTION create_and_activate_participation IS 'Crea y activa automáticamente una nueva participación (solo admins)';
+COMMENT ON FUNCTION sync_user_role_from_participation IS 'Sincroniza el rol en profiles con la participación activa';
+COMMENT ON FUNCTION get_user_participations IS 'Obtiene todas las participaciones de un usuario ordenadas por número';
+
+-- Comentarios en las nuevas funciones de asignación
+COMMENT ON FUNCTION check_user_participation IS 'Verifica si un usuario tiene participación activa y devuelve información básica';
+COMMENT ON FUNCTION create_participation_from_assignment IS 'Crea o actualiza participación desde la ventana de asignación (maneja supervisor, rol y generación)';
+COMMENT ON FUNCTION get_users_without_participation IS 'Obtiene lista de usuarios que no tienen participación activa';
+
+-- Comentarios en las funciones de logging
+COMMENT ON FUNCTION insert_trigger_log IS 'Inserta logs del trigger de forma segura (no falla si hay error)';
+COMMENT ON FUNCTION get_recent_logs IS 'Obtiene logs recientes del sistema para debugging';
+
+-- =====================================================
+-- FUNCIONES DEL SISTEMA DE PARTICIPACIONES
+-- =====================================================
+
+-- Función para verificar si un usuario tiene participación activa
+CREATE OR REPLACE FUNCTION check_user_participation(p_user_id UUID)
+RETURNS TABLE (
+  has_participation BOOLEAN,
+  participation_id UUID,
+  user_role TEXT,
+  user_generation TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    CASE WHEN p.active_participation_id IS NOT NULL THEN TRUE ELSE FALSE END as has_participation,
+    p.active_participation_id as participation_id,
+    p.role as user_role,
+    p.generation as user_generation
+  FROM profiles p
+  WHERE p.id = p_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para crear o actualizar participación desde asignación
+CREATE OR REPLACE FUNCTION create_participation_from_assignment(
+  p_user_id UUID,
+  p_generation_name TEXT,
+  p_role TEXT,
+  p_supervisor_id UUID DEFAULT NULL
+)
+RETURNS TABLE (
+  success BOOLEAN,
+  message TEXT,
+  participation_id UUID
+) AS $$
+DECLARE
+  v_generation_id UUID;
+  v_participation_id UUID;
+  v_existing_participation_id UUID;
+  v_participation_number INTEGER;
+BEGIN
+  -- Verificar si el usuario existe
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = p_user_id) THEN
+    RETURN QUERY SELECT FALSE, 'Usuario no encontrado', NULL::UUID;
+    RETURN;
+  END IF;
+
+  -- Obtener generation_id
+  SELECT id INTO v_generation_id 
+  FROM generations 
+  WHERE name = p_generation_name;
+  
+  IF v_generation_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, 'Generación no encontrada: ' || p_generation_name, NULL::UUID;
+    RETURN;
+  END IF;
+
+  -- Verificar si ya existe una participación activa para este usuario
+  SELECT active_participation_id INTO v_existing_participation_id
+  FROM profiles 
+  WHERE id = p_user_id;
+
+  -- Si ya tiene participación activa, marcar como completada y crear nueva
+  IF v_existing_participation_id IS NOT NULL THEN
+    UPDATE user_participations 
+    SET status = 'completed', updated_at = NOW()
+    WHERE id = v_existing_participation_id;
+  END IF;
+
+  -- Calcular número de participación
+  SELECT COALESCE(MAX(participation_number), 0) + 1
+  INTO v_participation_number
+  FROM user_participations
+  WHERE user_id = p_user_id;
+
+  -- Crear nueva participación
+  INSERT INTO user_participations (user_id, generation_id, role, participation_number, status)
+  VALUES (p_user_id, v_generation_id, p_role, v_participation_number, 'active')
+  RETURNING id INTO v_participation_id;
+
+  -- Actualizar perfil con nueva participación
+  UPDATE profiles
+  SET 
+    active_participation_id = v_participation_id,
+    role = p_role,
+    generation = p_generation_name,
+    supervisor_id = p_supervisor_id,
+    updated_at = NOW()
+  WHERE id = p_user_id;
+
+  RETURN QUERY SELECT TRUE, 'Participación creada exitosamente', v_participation_id;
+
+EXCEPTION
+  WHEN unique_violation THEN
+    -- Si ya existe participación para esta combinación, obtenerla
+    SELECT id INTO v_participation_id 
+    FROM user_participations 
+    WHERE user_id = p_user_id AND generation_id = v_generation_id AND role = p_role;
+    
+    -- Actualizar perfil
+    UPDATE profiles
+    SET 
+      active_participation_id = v_participation_id,
+      role = p_role,
+      generation = p_generation_name,
+      supervisor_id = p_supervisor_id,
+      updated_at = NOW()
+    WHERE id = p_user_id;
+    
+    RETURN QUERY SELECT TRUE, 'Participación existente activada', v_participation_id;
+  WHEN OTHERS THEN
+    RETURN QUERY SELECT FALSE, 'Error: ' || SQLERRM, NULL::UUID;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para obtener usuarios sin participación
+CREATE OR REPLACE FUNCTION get_users_without_participation()
+RETURNS TABLE (
+  user_id UUID,
+  name TEXT,
+  email TEXT,
+  role TEXT,
+  generation TEXT,
+  supervisor_id UUID
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id as user_id,
+    p.name,
+    p.email,
+    p.role,
+    p.generation,
+    p.supervisor_id
+  FROM profiles p
+  WHERE p.active_participation_id IS NULL
+    AND p.role IN ('lider', 'senior', 'master_senior', 'admin')
+  ORDER BY p.name;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Otorgar permisos para las nuevas funciones
+GRANT EXECUTE ON FUNCTION check_user_participation(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION create_participation_from_assignment(UUID, TEXT, TEXT, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_users_without_participation() TO authenticated;
+
+-- Función para obtener el rol actual del usuario desde participaciones
+CREATE OR REPLACE FUNCTION get_user_current_role(p_user_id UUID)
+RETURNS TEXT AS $$
+DECLARE
+  v_role TEXT;
+BEGIN
+  -- Obtener el rol de la participación activa
+  SELECT up.role INTO v_role
+  FROM user_participations up
+  JOIN profiles p ON p.active_participation_id = up.id
+  WHERE p.id = p_user_id
+    AND up.status = 'active'
+  LIMIT 1;
+  
+  -- Si no hay participación activa, devolver null
+  RETURN COALESCE(v_role, NULL);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para obtener participación activa de un usuario
+CREATE OR REPLACE FUNCTION get_user_active_participation(p_user_id UUID)
+RETURNS TABLE (
+  participation_id UUID,
+  generation_name TEXT,
+  role TEXT,
+  status TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    up.id as participation_id,
+    g.name as generation_name,
+    up.role,
+    up.status
+  FROM user_participations up
+  JOIN generations g ON g.id = up.generation_id
+  WHERE up.user_id = p_user_id 
+    AND up.status = 'active'
+  LIMIT 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para cambiar participación activa (solo admins)
+CREATE OR REPLACE FUNCTION change_user_active_participation(
+  p_user_id UUID,
+  p_participation_id UUID
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+  v_is_admin BOOLEAN;
+  v_participation_exists BOOLEAN;
+  v_participation_role TEXT;
+BEGIN
+  -- Verificar que el usuario actual es admin
+  SELECT is_user_admin() INTO v_is_admin;
+  IF NOT v_is_admin THEN
+    RAISE EXCEPTION 'Solo los administradores pueden cambiar participaciones activas';
+  END IF;
+  
+  -- Verificar que la participación existe y pertenece al usuario
+  SELECT EXISTS(
+    SELECT 1 FROM user_participations 
+    WHERE id = p_participation_id AND user_id = p_user_id
+  ) INTO v_participation_exists;
+  
+  IF NOT v_participation_exists THEN
+    RAISE EXCEPTION 'La participación no existe o no pertenece al usuario';
+  END IF;
+  
+  -- Obtener el rol de la participación
+  SELECT role INTO v_participation_role
+  FROM user_participations 
+  WHERE id = p_participation_id;
+  
+  -- Actualizar la participación activa
+  UPDATE profiles 
+  SET active_participation_id = p_participation_id
+  WHERE id = p_user_id;
+  
+  -- Sincronizar el rol en profiles con la participación activa
+  UPDATE profiles 
+  SET role = v_participation_role
+  WHERE id = p_user_id;
+  
+  RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para crear nueva participación
+CREATE OR REPLACE FUNCTION create_user_participation(
+  p_user_id UUID,
+  p_generation_id UUID,
+  p_role TEXT
+)
+RETURNS UUID AS $$
+DECLARE
+  v_participation_id UUID;
+  v_participation_number INTEGER;
+BEGIN
+  -- Verificar que el usuario actual es admin
+  IF NOT is_user_admin() THEN
+    RAISE EXCEPTION 'Solo los administradores pueden crear participaciones';
+  END IF;
+  
+  -- Obtener el siguiente número de participación para este usuario
+  SELECT COALESCE(MAX(participation_number), 0) + 1 
+  INTO v_participation_number
+  FROM user_participations 
+  WHERE user_id = p_user_id;
+  
+  -- Crear la nueva participación
+  INSERT INTO user_participations (
+    user_id, 
+    generation_id, 
+    role, 
+    participation_number
+  ) VALUES (
+    p_user_id, 
+    p_generation_id, 
+    p_role, 
+    v_participation_number
+  ) RETURNING id INTO v_participation_id;
+  
+  -- Si es la primera participación, marcarla como activa
+  IF v_participation_number = 1 THEN
+    UPDATE profiles 
+    SET active_participation_id = v_participation_id
+    WHERE id = p_user_id;
+  END IF;
+  
+  RETURN v_participation_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para crear nueva participación y activarla automáticamente
+CREATE OR REPLACE FUNCTION create_and_activate_participation(
+  p_user_id UUID,
+  p_generation_id UUID,
+  p_role TEXT
+)
+RETURNS UUID AS $$
+DECLARE
+  v_participation_id UUID;
+  v_participation_number INTEGER;
+BEGIN
+  -- Verificar que el usuario actual es admin
+  IF NOT is_user_admin() THEN
+    RAISE EXCEPTION 'Solo los administradores pueden crear participaciones';
+  END IF;
+  
+  -- Verificar que el rol es válido
+  IF p_role NOT IN ('lider', 'senior', 'master_senior', 'admin') THEN
+    RAISE EXCEPTION 'Rol inválido. Debe ser lider, senior, master_senior o admin';
+  END IF;
+  
+  -- Obtener el siguiente número de participación para este usuario
+  SELECT COALESCE(MAX(participation_number), 0) + 1 
+  INTO v_participation_number
+  FROM user_participations 
+  WHERE user_id = p_user_id;
+  
+  -- Crear la nueva participación
+  INSERT INTO user_participations (
+    user_id, 
+    generation_id, 
+    role, 
+    participation_number,
+    status
+  ) VALUES (
+    p_user_id, 
+    p_generation_id, 
+    p_role, 
+    v_participation_number,
+    'active'
+  ) RETURNING id INTO v_participation_id;
+  
+  -- Marcar participación anterior como completada
+  UPDATE user_participations 
+  SET status = 'completed'
+  WHERE user_id = p_user_id 
+    AND participation_number < v_participation_number;
+  
+  -- Actualizar participación activa
+  UPDATE profiles 
+  SET active_participation_id = v_participation_id
+  WHERE id = p_user_id;
+  
+  -- Sincronizar el rol en profiles
+  UPDATE profiles 
+  SET role = p_role
+  WHERE id = p_user_id;
+  
+  RETURN v_participation_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para sincronizar el rol en profiles con la participación activa
+CREATE OR REPLACE FUNCTION sync_user_role_from_participation(p_user_id UUID)
+RETURNS TEXT AS $$
+DECLARE
+  v_current_role TEXT;
+  v_participation_role TEXT;
+BEGIN
+  -- Obtener el rol de la participación activa
+  SELECT up.role INTO v_participation_role
+  FROM user_participations up
+  JOIN profiles p ON p.active_participation_id = up.id
+  WHERE p.id = p_user_id
+    AND up.status = 'active'
+  LIMIT 1;
+  
+  -- Si no hay participación activa, no hacer nada
+  IF v_participation_role IS NULL THEN
+    RETURN 'No hay participación activa';
+  END IF;
+  
+  -- Obtener el rol actual en profiles
+  SELECT role INTO v_current_role
+  FROM profiles 
+  WHERE id = p_user_id;
+  
+  -- Si el rol es diferente, actualizarlo
+  IF v_current_role != v_participation_role THEN
+    UPDATE profiles 
+    SET role = v_participation_role
+    WHERE id = p_user_id;
+    
+    RETURN 'Rol actualizado de ' || COALESCE(v_current_role, 'NULL') || ' a ' || v_participation_role;
+  ELSE
+    RETURN 'Rol ya está sincronizado: ' || v_participation_role;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para obtener todas las participaciones de un usuario
+CREATE OR REPLACE FUNCTION get_user_participations(p_user_id UUID)
+RETURNS TABLE (
+  participation_id UUID,
+  generation_name TEXT,
+  role TEXT,
+  status TEXT,
+  participation_number INTEGER,
+  created_at TIMESTAMP WITH TIME ZONE,
+  is_active BOOLEAN
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    up.id as participation_id,
+    g.name as generation_name,
+    up.role,
+    up.status,
+    up.participation_number,
+    up.created_at,
+    (p.active_participation_id = up.id) as is_active
+  FROM user_participations up
+  JOIN generations g ON g.id = up.generation_id
+  JOIN profiles p ON p.id = up.user_id
+  WHERE up.user_id = p_user_id
+  ORDER BY up.participation_number DESC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =====================================================
+-- TABLA DE LOGS PARA DEBUGGING
+-- =====================================================
+
+-- Crear tabla para almacenar logs del trigger
+CREATE TABLE IF NOT EXISTS trigger_logs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  log_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  log_level TEXT NOT NULL,
+  message TEXT NOT NULL,
+  user_id UUID,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Función para insertar logs
+CREATE OR REPLACE FUNCTION insert_trigger_log(
+  p_level TEXT,
+  p_message TEXT,
+  p_user_id UUID DEFAULT NULL
+)
+RETURNS VOID AS $$
+BEGIN
+  INSERT INTO trigger_logs (log_level, message, user_id)
+  VALUES (p_level, p_message, p_user_id);
+EXCEPTION WHEN OTHERS THEN
+  -- Si falla el log, no fallar el trigger
+  NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para obtener logs recientes
+CREATE OR REPLACE FUNCTION get_recent_logs(p_limit INTEGER DEFAULT 50)
+RETURNS TABLE (
+  log_time TIMESTAMP WITH TIME ZONE,
+  log_level TEXT,
+  message TEXT,
+  user_id UUID
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    t.log_time,
+    t.log_level,
+    t.message,
+    t.user_id
+  FROM trigger_logs t
+  WHERE t.log_level IN ('LOG', 'NOTICE', 'WARNING', 'ERROR', 'FATAL', 'PANIC')
+    AND (t.message LIKE '%handle_new_user%' OR t.message LIKE '%on_auth_user_created%')
+  ORDER BY t.log_time DESC
+  LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Otorgar permisos para las funciones de logging
+GRANT EXECUTE ON FUNCTION insert_trigger_log(TEXT, TEXT, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_recent_logs(INTEGER) TO authenticated;
+
+-- =====================================================
+-- MIGRACIÓN DE DATOS EXISTENTES AL SISTEMA DE PARTICIPACIONES
+-- =====================================================
+
+-- Migrar usuarios existentes al sistema de participaciones
+DO $$
+DECLARE
+  user_record RECORD;
+  v_generation_id UUID;
+  v_participation_id UUID;
+  v_participation_number INTEGER;
+  v_success_count INTEGER := 0;
+  v_error_count INTEGER := 0;
+BEGIN
+  RAISE NOTICE 'Iniciando migración de usuarios existentes a participaciones...';
+
+  -- Procesar usuarios que no tienen participación activa
+  FOR user_record IN
+    SELECT p.id, p.name, p.email, p.role, p.generation, p.supervisor_id
+    FROM profiles p
+    LEFT JOIN user_participations up ON p.id = up.user_id AND up.status = 'active'
+    WHERE up.id IS NULL 
+      AND p.role IN ('lider', 'senior', 'master_senior', 'admin')
+  LOOP
+    BEGIN
+      RAISE NOTICE 'Procesando usuario: % (%)', user_record.name, user_record.email;
+
+      -- Obtener generation_id
+      SELECT id INTO v_generation_id 
+      FROM generations 
+      WHERE name = user_record.generation;
+
+      IF v_generation_id IS NULL THEN
+        RAISE WARNING 'Generación "%" no encontrada para usuario %', user_record.generation, user_record.name;
+        v_error_count := v_error_count + 1;
+        CONTINUE;
+      END IF;
+
+      -- Calcular número de participación
+      SELECT COALESCE(MAX(participation_number), 0) + 1
+      INTO v_participation_number
+      FROM user_participations
+      WHERE user_id = user_record.id;
+
+      -- Crear participación
+      INSERT INTO user_participations (user_id, generation_id, role, participation_number, status)
+      VALUES (user_record.id, v_generation_id, user_record.role, v_participation_number, 'active')
+      RETURNING id INTO v_participation_id;
+
+      -- Actualizar perfil con active_participation_id
+      UPDATE profiles
+      SET active_participation_id = v_participation_id
+      WHERE id = user_record.id;
+
+      RAISE NOTICE 'Participación creada para %: %', user_record.name, v_participation_id;
+      v_success_count := v_success_count + 1;
+
+    EXCEPTION
+      WHEN unique_violation THEN
+        RAISE WARNING 'Participación ya existe para usuario %', user_record.name;
+        v_error_count := v_error_count + 1;
+      WHEN OTHERS THEN
+        RAISE WARNING 'Error procesando usuario %: %', user_record.name, SQLERRM;
+        v_error_count := v_error_count + 1;
+    END;
+  END LOOP;
+
+  RAISE NOTICE 'Migración completada. Exitosos: %, Errores: %', v_success_count, v_error_count;
+END $$;
+
+-- Migrar metas existentes a las nuevas participaciones
+UPDATE goals 
+SET user_participation_id = up.id
+FROM user_participations up
+WHERE goals.user_id = up.user_id 
+  AND up.status = 'active';
+
+-- Migrar mecanismos existentes a las nuevas participaciones
+UPDATE mechanisms 
+SET user_participation_id = up.id
+FROM user_participations up
+WHERE mechanisms.user_id = up.user_id 
+  AND up.status = 'active';
+
+-- Sincronizar roles en profiles con las participaciones activas
+UPDATE profiles 
+SET role = up.role
+FROM user_participations up
+WHERE profiles.active_participation_id = up.id
+  AND up.status = 'active'
+  AND profiles.role != up.role;
+
 -- =====================================================
 -- MENSAJE DE CONFIRMACIÓN
 -- =====================================================
-SELECT 'Base de datos CC Tecate optimizada y compatible creada exitosamente! Incluye sistema de llamadas automático, jerarquía unificada con supervisor_id y políticas completas para administradores.' as status;
+SELECT 'Base de datos CC Tecate optimizada y compatible creada exitosamente! Incluye: sistema de llamadas automático, jerarquía unificada con supervisor_id, sistema de participaciones completo, trigger simplificado para registro de usuarios, funciones de asignación automática de participaciones, sistema de logging para debugging, y políticas completas para administradores.' as status;
 
 -- =====================================================
 -- RPC: Obtener líderes asignados a un supervisor

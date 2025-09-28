@@ -15,7 +15,7 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'lider' as 'lider' | 'senior' | 'admin'
+    role: 'lider' as 'lider' | 'senior' | 'master_senior' | 'admin'
   })
   const [activeGeneration, setActiveGeneration] = useState<Generation | null>(null)
   const [showPassword, setShowPassword] = useState(false)
@@ -167,6 +167,7 @@ export default function RegisterPage() {
                 >
                   <option value="lider" className="">Líder</option>
                   <option value="senior" className="">Senior</option>
+                  <option value="master_senior" className="">Master Senior</option>
                   <option value="admin" className="">Admin</option>
                 </select>
               </div>

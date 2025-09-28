@@ -38,7 +38,7 @@ export function CallScheduleForm({ isOpen, onClose, onSubmit }: CallScheduleForm
           .eq('id', selectedUserId)
           .single()
         
-        // Si tiene un supervisor asignado (senior o admin)
+        // Si tiene un supervisor asignado (senior, master_senior o admin)
         if (user?.supervisor_id) {
           const { data: supervisor } = await supabase
             .from('profiles')
@@ -55,7 +55,7 @@ export function CallScheduleForm({ isOpen, onClose, onSubmit }: CallScheduleForm
         setAssignedSenior(null)
         setSelectedSenior('')
       } catch (error) {
-        console.error('Error loading assigned senior/admin:', error)
+        console.error('Error loading assigned supervisor:', error)
         setAssignedSenior(null)
         setSelectedSenior('')
       }

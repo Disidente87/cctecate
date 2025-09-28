@@ -13,7 +13,7 @@ interface User {
   name: string
   email: string
   generation: string
-  role: 'lider' | 'senior' | 'admin'
+  role: 'lider' | 'senior' | 'master_senior' | 'admin'
   supervisor_id?: string
 }
 
@@ -30,6 +30,7 @@ export default function AsignacionPage() {
   const [generations, setGenerations] = useState<string[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [seniors, setSeniors] = useState<User[]>([])
+  const [masterSeniors, setMasterSeniors] = useState<User[]>([])
   const [admins, setAdmins] = useState<User[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -39,21 +40,49 @@ export default function AsignacionPage() {
   useEffect(() => {
     const loadGenerations = async () => {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('generation')
-        .in('role', ['lider', 'senior'])
-        .order('generation')
+        .from('generations')
+        .select('name, registration_start_date, registration_end_date')
       
       if (error) {
         console.error('Error loading generations:', error)
         return
       }
       
-      const uniqueGenerations = [...new Set(data.map(row => row.generation))].sort()
-      setGenerations(uniqueGenerations)
-      if (uniqueGenerations.length > 0) {
-        setSelectedGeneration(uniqueGenerations[0])
+      const today = new Date()
+      today.setHours(0, 0, 0, 0) // Start of today
+      
+      // Filter generations with active registration today
+      const activeGenerations = data.filter(gen => {
+        const startDate = new Date(gen.registration_start_date)
+        const endDate = new Date(gen.registration_end_date)
+        startDate.setHours(0, 0, 0, 0)
+        endDate.setHours(23, 59, 59, 999)
+        
+        return today >= startDate && today <= endDate
+      })
+      
+      // Sort all generations by number (descending for display)
+      const allGenerationNames = data.map(row => row.name).sort((a, b) => {
+        const numA = parseInt(a.replace(/[^0-9]/g, '')) || 0
+        const numB = parseInt(b.replace(/[^0-9]/g, '')) || 0
+        return numB - numA // Sort in descending order (C9, C8, C7, etc.)
+      })
+      
+      // If there are active generations, select the smallest one
+      let defaultGeneration = allGenerationNames[0] // Fallback to first generation
+      
+      if (activeGenerations.length > 0) {
+        // Sort active generations by number (ascending) to get the smallest
+        const activeGenerationNames = activeGenerations.map(gen => gen.name).sort((a, b) => {
+          const numA = parseInt(a.replace(/[^0-9]/g, '')) || 0
+          const numB = parseInt(b.replace(/[^0-9]/g, '')) || 0
+          return numA - numB // Sort in ascending order to get smallest first
+        })
+        defaultGeneration = activeGenerationNames[0] // Smallest active generation
       }
+      
+      setGenerations(allGenerationNames)
+      setSelectedGeneration(defaultGeneration)
     }
     
     loadGenerations()
@@ -66,32 +95,90 @@ export default function AsignacionPage() {
     const loadUsers = async () => {
       setIsLoading(true)
       try {
-        const { data, error } = await supabase
+        // Load non-admin users for selected generation
+        const { data: usersData, error: usersError } = await supabase
           .from('profiles')
-          .select('id, name, email, generation, role, supervisor_id')
+          .select(`
+            id, 
+            name, 
+            email, 
+            generation, 
+            role, 
+            supervisor_id,
+            active_participation_id
+          `)
           .eq('generation', selectedGeneration)
-          .in('role', ['lider', 'senior', 'admin'])
+          .in('role', ['lider', 'senior', 'master_senior'])
           .order('role', { ascending: true })
           .order('name')
         
-        if (error) {
-          console.error('Error loading users:', error)
+        if (usersError) {
+          console.error('Error loading users:', usersError)
           return
         }
         
-        const usersData = data || []
-        setUsers(usersData)
+        // Load all admins (regardless of generation)
+        const { data: adminsData, error: adminsError } = await supabase
+          .from('profiles')
+          .select(`
+            id, 
+            name, 
+            email, 
+            generation, 
+            role, 
+            supervisor_id,
+            active_participation_id
+          `)
+          .eq('role', 'admin')
+          .order('name')
         
-        // Separate by role
-        setSeniors(usersData.filter(u => u.role === 'senior'))
-        setAdmins(usersData.filter(u => u.role === 'admin'))
+        if (adminsError) {
+          console.error('Error loading admins:', adminsError)
+          return
+        }
         
-        // Initialize assignments
-        const initialAssignments: Assignment[] = usersData.map(u => ({
+        // Combine users and admins
+        const allUsersData = [...(usersData || []), ...(adminsData || [])]
+        setUsers(allUsersData)
+        
+        // Get current roles from participations for each user
+        const usersWithCurrentRoles = await Promise.all(
+          allUsersData.map(async (u) => {
+            let currentRole = u.role // fallback to profiles.role
+            
+            if (u.active_participation_id) {
+              try {
+                const { data: participationData } = await supabase
+                  .from('user_participations')
+                  .select('role')
+                  .eq('id', u.active_participation_id)
+                  .single()
+                
+                if (participationData) {
+                  currentRole = participationData.role
+                }
+              } catch (error) {
+                console.warn(`Error getting participation for user ${u.name}:`, error)
+              }
+            }
+            
+            return {
+              ...u,
+              currentRole
+            }
+          })
+        )
+        
+        setSeniors(usersWithCurrentRoles.filter(u => u.currentRole === 'senior'))
+        setMasterSeniors(usersWithCurrentRoles.filter(u => u.currentRole === 'master_senior'))
+        setAdmins(usersWithCurrentRoles.filter(u => u.currentRole === 'admin'))
+        
+        // Initialize assignments with current roles
+        const initialAssignments: Assignment[] = usersWithCurrentRoles.map(u => ({
           userId: u.id,
           assignedTo: u.supervisor_id || null,
           assignedToName: null,
-          role: u.role,
+          role: u.currentRole,
           generation: u.generation
         }))
         setAssignments(initialAssignments)
@@ -112,7 +199,7 @@ export default function AsignacionPage() {
       setAssignments(prev => prev.map(assignment => {
         if (!assignment.assignedTo) return assignment
         
-        const assignedUser = [...seniors, ...admins].find(u => u.id === assignment.assignedTo)
+        const assignedUser = [...seniors, ...masterSeniors, ...admins].find(u => u.id === assignment.assignedTo)
         return {
           ...assignment,
           assignedToName: assignedUser?.name || null
@@ -121,7 +208,7 @@ export default function AsignacionPage() {
     }
     
     updateAssignmentNames()
-  }, [seniors, admins])
+  }, [seniors, masterSeniors, admins])
 
   const handleAssignmentChange = (userId: string, assignedTo: string | null) => {
     setAssignments(prev => prev.map(assignment => 
@@ -145,17 +232,18 @@ export default function AsignacionPage() {
     // Update users state to reflect role change
     setUsers(prev => prev.map(user => 
       user.id === userId 
-        ? { ...user, role: newRole as 'lider' | 'senior' | 'admin' }
+        ? { ...user, role: newRole as 'lider' | 'senior' | 'master_senior' | 'admin' }
         : user
     ))
     
-    // Update seniors and admins lists
+    // Update seniors, master_seniors and admins lists
     const updatedUsers = users.map(user => 
       user.id === userId 
-        ? { ...user, role: newRole as 'lider' | 'senior' | 'admin' }
+        ? { ...user, role: newRole as 'lider' | 'senior' | 'master_senior' | 'admin' }
         : user
     )
     setSeniors(updatedUsers.filter(u => u.role === 'senior'))
+    setMasterSeniors(updatedUsers.filter(u => u.role === 'master_senior'))
     setAdmins(updatedUsers.filter(u => u.role === 'admin'))
   }
 
@@ -183,50 +271,52 @@ export default function AsignacionPage() {
     try {
       console.log('Saving assignments:', assignments)
       
-      // Update all assignments (including null assignments to clear supervisor_id) and roles
+      // Process all assignments using the new participation logic
       for (const assignment of assignments) {
         const user = users.find(u => u.id === assignment.userId)
         if (!user) continue
         
-        console.log(`Updating user ${user.name}: supervisor_id = ${assignment.assignedTo}, role = ${assignment.role}, generation = ${assignment.generation}`)
+        console.log(`Processing user ${user.name}: supervisor_id = ${assignment.assignedTo}, role = ${assignment.role}, generation = ${assignment.generation}`)
         
-        const updateData: {
-          supervisor_id: string | null
-          role?: string
-          generation?: string
-        } = {
-          supervisor_id: assignment.assignedTo
+        // Use the new function to create/update participation
+        const { data: participationResult, error: participationError } = await supabase
+          .rpc('create_participation_from_assignment', {
+            p_user_id: assignment.userId,
+            p_generation_name: assignment.generation || user.generation,
+            p_role: assignment.role || user.role,
+            p_supervisor_id: assignment.assignedTo
+          })
+        
+        if (participationError) {
+          console.error('Error creating/updating participation:', participationError)
+          throw participationError
         }
         
-        // Always include role update if it's defined in assignment
-        if (assignment.role) {
-          updateData.role = assignment.role
-          console.log(`Role will be updated to: ${assignment.role}`)
-        }
-        
-        // Always include generation update if it's defined in assignment
-        if (assignment.generation) {
-          updateData.generation = assignment.generation
-          console.log(`Generation will be updated to: ${assignment.generation}`)
-        }
-        
-        const { error } = await supabase
-          .from('profiles')
-          .update(updateData)
-          .eq('id', assignment.userId)
-        
-        if (error) {
-          console.error('Error updating assignment:', error)
-          throw error
+        if (participationResult && participationResult.length > 0) {
+          const result = participationResult[0]
+          if (result.success) {
+            console.log(`✅ ${result.message} for user ${user.name}. Participation ID: ${result.participation_id}`)
+          } else {
+            console.error(`❌ ${result.message} for user ${user.name}`)
+            throw new Error(result.message)
+          }
         }
       }
       
-      // Reload data
+      // Reload data with current roles from participations
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, name, email, generation, role, supervisor_id')
+        .select(`
+          id, 
+          name, 
+          email, 
+          generation, 
+          role, 
+          supervisor_id,
+          active_participation_id
+        `)
         .eq('generation', selectedGeneration)
-        .in('role', ['lider', 'senior', 'admin'])
+        .in('role', ['lider', 'senior', 'master_senior', 'admin'])
         .order('role', { ascending: true })
         .order('name')
       
@@ -238,11 +328,39 @@ export default function AsignacionPage() {
       const usersData = data || []
       setUsers(usersData)
       
-      const updatedAssignments: Assignment[] = usersData.map(u => ({
+      // Get current roles from participations for each user
+      const usersWithCurrentRoles = await Promise.all(
+        usersData.map(async (u) => {
+          let currentRole = u.role // fallback to profiles.role
+          
+          if (u.active_participation_id) {
+            try {
+              const { data: participationData } = await supabase
+                .from('user_participations')
+                .select('role')
+                .eq('id', u.active_participation_id)
+                .single()
+              
+              if (participationData) {
+                currentRole = participationData.role
+              }
+            } catch (error) {
+              console.warn(`Error getting participation for user ${u.name}:`, error)
+            }
+          }
+          
+          return {
+            ...u,
+            currentRole
+          }
+        })
+      )
+      
+      const updatedAssignments: Assignment[] = usersWithCurrentRoles.map(u => ({
         userId: u.id,
         assignedTo: u.supervisor_id || null,
         assignedToName: null,
-        role: u.role,
+        role: u.currentRole,
         generation: u.generation
       }))
       setAssignments(updatedAssignments)
@@ -269,8 +387,10 @@ export default function AsignacionPage() {
   const getAvailableAssignees = (user: User, currentRole?: string) => {
     const role = currentRole || user.role
     if (role === 'lider') {
-      return [...seniors, ...admins]
+      return [...seniors, ...masterSeniors, ...admins]
     } else if (role === 'senior') {
+      return [...masterSeniors, ...admins]
+    } else if (role === 'master_senior') {
       return admins
     }
     return []
@@ -292,7 +412,7 @@ export default function AsignacionPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Asignación de Líderes</h1>
         <p className="text-gray-600 mt-2">
-          Asigna seniors y admins a líderes y otros usuarios
+          Asigna seniors, master seniors y admins a líderes y otros usuarios
         </p>
       </div>
 
@@ -397,6 +517,7 @@ export default function AsignacionPage() {
                       <SelectContent className="bg-white border border-gray-200 shadow-lg">
                         <SelectItem value="lider" className="hover:bg-gray-50">Líder</SelectItem>
                         <SelectItem value="senior" className="hover:bg-gray-50">Senior</SelectItem>
+                        <SelectItem value="master_senior" className="hover:bg-gray-50">Master Senior</SelectItem>
                         <SelectItem value="admin" className="hover:bg-gray-50">Admin</SelectItem>
                       </SelectContent>
                     </Select>

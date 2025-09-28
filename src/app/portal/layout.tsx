@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import PortalNavbar from '@/components/portal/PortalNavbar'
 import { SelectedUserProvider } from '@/contexts/selected-user'
+import { ActiveParticipationProvider } from '@/contexts/active-participation'
 import LeaderSwitcher from '@/components/portal/LeaderSwitcher'
 import type { UserRole } from '@/types'
 
@@ -32,15 +33,17 @@ export default async function PortalLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       <SelectedUserProvider authUserId={user.id} authUserRole={effectiveRole}>
-        <PortalNavbar user={{
-          id: user.id,
-          email: user.email || '',
-          user_metadata: user.user_metadata
-        }} />
-        <LeaderSwitcher />
-        <main className="py-6">
-          {children}
-        </main>
+        <ActiveParticipationProvider>
+          <PortalNavbar user={{
+            id: user.id,
+            email: user.email || '',
+            user_metadata: user.user_metadata
+          }} />
+          <LeaderSwitcher />
+          <main className="py-6">
+            {children}
+          </main>
+        </ActiveParticipationProvider>
       </SelectedUserProvider>
     </div>
   )

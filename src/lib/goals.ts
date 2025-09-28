@@ -1,16 +1,34 @@
 import { supabase } from '@/lib/supabase'
 import type { Goal, GoalInsert, GoalUpdate, Mechanism, MechanismInsert, GoalWithMechanisms } from '@/types/database'
 
-// Obtener todas las metas de un usuario con sus mecanismos
-export async function getUserGoals(userId: string): Promise<GoalWithMechanisms[]> {
+// Obtener todas las metas de un usuario con sus mecanismos (usando participación activa)
+export async function getUserGoals(userId: string, participationId?: string): Promise<GoalWithMechanisms[]> {
   try {
-    const { data: goals, error: goalsError } = await supabase
+    let query = supabase
       .from('goals')
       .select(`
         *,
         mechanisms (*)
       `)
       .eq('user_id', userId)
+
+    // Si se proporciona participationId, filtrar por participación
+    if (participationId) {
+      query = query.eq('user_participation_id', participationId)
+    } else {
+      // Si no se proporciona, usar la participación activa del usuario
+      const { data: activeParticipation } = await supabase
+        .rpc('get_user_active_participation', { p_user_id: userId })
+      
+      if (activeParticipation?.[0]?.participation_id) {
+        query = query.eq('user_participation_id', activeParticipation[0].participation_id)
+      } else {
+        // Fallback: usar metas sin user_participation_id (datos antiguos)
+        query = query.is('user_participation_id', null)
+      }
+    }
+
+    const { data: goals, error: goalsError } = await query
       .order('created_at', { ascending: false })
 
     if (goalsError) {
@@ -25,16 +43,31 @@ export async function getUserGoals(userId: string): Promise<GoalWithMechanisms[]
   }
 }
 
-// Crear una nueva meta con sus mecanismos
+// Crear una nueva meta con sus mecanismos (usando participación activa)
 export async function createGoalWithMechanisms(
   goal: Omit<GoalInsert, 'id' | 'created_at' | 'updated_at'>,
-  mechanisms: Omit<MechanismInsert, 'id' | 'goal_id' | 'created_at' | 'updated_at'>[]
+  mechanisms: Omit<MechanismInsert, 'id' | 'goal_id' | 'created_at' | 'updated_at'>[],
+  participationId?: string
 ): Promise<GoalWithMechanisms | null> {
   try {
-    // Crear la meta
+    // Obtener la participación activa si no se proporciona
+    let activeParticipationId = participationId
+    if (!activeParticipationId) {
+      const { data: activeParticipation } = await supabase
+        .rpc('get_user_active_participation', { p_user_id: goal.user_id })
+      
+      activeParticipationId = activeParticipation?.[0]?.participation_id
+    }
+
+    // Crear la meta con la participación
+    const goalWithParticipation = {
+      ...goal,
+      user_participation_id: activeParticipationId
+    }
+
     const { data: newGoal, error: goalError } = await supabase
       .from('goals')
-      .insert(goal)
+      .insert(goalWithParticipation)
       .select()
       .single()
 
@@ -43,10 +76,11 @@ export async function createGoalWithMechanisms(
       return null
     }
 
-    // Crear los mecanismos
+    // Crear los mecanismos con la participación
     const mechanismsWithGoalId = mechanisms.map(mechanism => ({
       ...mechanism,
-      goal_id: newGoal.id
+      goal_id: newGoal.id,
+      user_participation_id: activeParticipationId
     }))
 
     const { data: newMechanisms, error: mechanismsError } = await supabase

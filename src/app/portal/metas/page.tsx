@@ -13,9 +13,11 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useSelectedUser } from '@/contexts/selected-user'
+import { useActiveParticipation } from '@/contexts/active-participation'
 import { getUserGoals, createGoalWithMechanisms, updateGoal, deleteGoal, deleteMechanism } from '@/lib/goals'
 import type { GoalWithMechanisms, Mechanism, MechanismInsert } from '@/types/database'
 import { format } from 'date-fns'
+import { ParticipationSelector } from '@/components/portal/ParticipationSelector'
 
 const goalCategories = [
   'Personal',
@@ -179,6 +181,7 @@ const frequencyLabels = {
 
 export default function MetasPage() {
   const { selectedUserId, authUserId, isSenior } = useSelectedUser()
+  const { activeParticipation, isAdmin } = useActiveParticipation()
   const [goals, setGoals] = useState<GoalWithMechanisms[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<{ id: string } | null>(null)
@@ -211,7 +214,9 @@ export default function MetasPage() {
         const viewUserId = selectedUserId || authUserId
         if (viewUserId) {
           setUser({ id: viewUserId })
-          const userGoals = await getUserGoals(viewUserId)
+          // Usar la participación activa si está disponible
+          const participationId = activeParticipation?.participation_id
+          const userGoals = await getUserGoals(viewUserId, participationId)
           
           // Calcular progreso dinámicamente para cada meta
           const goalsWithProgress = await Promise.all(
@@ -246,7 +251,7 @@ export default function MetasPage() {
     }
 
     loadUserAndGoals()
-  }, [selectedUserId, authUserId])
+  }, [selectedUserId, authUserId, activeParticipation])
 
   const handleAddGoal = async () => {
     if (!newGoal.category || !newGoal.description || newGoal.mechanisms.length < 4 || newGoal.mechanisms.length > 6 || !user) return
@@ -392,6 +397,13 @@ export default function MetasPage() {
           Establece y gestiona tus objetivos personales para alcanzar tus sueños
         </p>
       </div>
+
+      {/* Selector de Participación (solo para admins) */}
+      {isAdmin && (
+        <div className="mb-6">
+          <ParticipationSelector />
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">

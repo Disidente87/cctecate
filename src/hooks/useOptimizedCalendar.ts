@@ -87,11 +87,14 @@ interface GoalProgress {
 }
 
 
-// Función de fallback para cargar datos básicos
+// Función de fallback para cargar datos básicos (usando participación activa)
 const loadBasicCalendarData = async (userId: string, dateRange: { start: Date; end: Date }) => {
   try {
-    // Cargar metas y mecanismos del usuario
-    const { data: goals, error: goalsError } = await supabase
+    // Obtener la participación activa del usuario
+    const { data: activeParticipation } = await supabase
+      .rpc('get_user_active_participation', { p_user_id: userId })
+
+    let goalsQuery = supabase
       .from('goals')
       .select(`
         id,
@@ -106,6 +109,16 @@ const loadBasicCalendarData = async (userId: string, dateRange: { start: Date; e
         )
       `)
       .eq('user_id', userId)
+
+    // Filtrar por participación activa si existe
+    if (activeParticipation?.[0]?.participation_id) {
+      goalsQuery = goalsQuery.eq('user_participation_id', activeParticipation[0].participation_id)
+    } else {
+      // Fallback: usar metas sin user_participation_id (datos antiguos)
+      goalsQuery = goalsQuery.is('user_participation_id', null)
+    }
+
+    const { data: goals, error: goalsError } = await goalsQuery
 
     if (goalsError) throw goalsError
 
@@ -1127,7 +1140,7 @@ export const useGoalProgress = (userId: string, goalIds?: string[]) => {
               // Hoy está dentro del rango del mecanismo, filtrar por fechas
               completionsQuery = completionsQuery
                 .gte('completed_date', format(actualStartDate, 'yyyy-MM-dd'))
-                .lte('completed_date', format(todayEndDate, 'yyyy-MM-dd'))
+                .lte('completed_date', format(actualEndDate, 'yyyy-MM-dd'))
             }
             // Si hoy es anterior al inicio, no filtrar por fechas (contar todas)
 
