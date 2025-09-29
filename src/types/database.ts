@@ -10,7 +10,7 @@ export interface Database {
           completed: boolean
           created_at: string
           updated_at: string
-          completed_by_senior_id: string | null
+          completed_by_supervisor_id: string | null
           progress_percentage: number
         }
         Insert: {
@@ -21,7 +21,7 @@ export interface Database {
           completed?: boolean
           created_at?: string
           updated_at?: string
-          completed_by_senior_id?: string | null
+          completed_by_supervisor_id?: string | null
           progress_percentage?: number
         }
         Update: {
@@ -32,7 +32,7 @@ export interface Database {
           completed?: boolean
           created_at?: string
           updated_at?: string
-          completed_by_senior_id?: string | null
+          completed_by_supervisor_id?: string | null
           progress_percentage?: number
         }
       }

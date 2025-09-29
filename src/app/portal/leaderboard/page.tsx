@@ -286,7 +286,7 @@ export default function LeaderboardPage() {
                       
                       <div className="flex items-center space-x-2">
                         <Phone className="h-4 w-4 " />
-                        <span className="">Llamadas: {entry.calls_score.toFixed(1)}/3.0</span>
+                        <span className="">Llamadas: {entry.calls_score.toFixed(1)}%</span>
                       </div>
                       
                       <div className="flex items-center space-x-2">

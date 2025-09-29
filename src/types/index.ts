@@ -55,7 +55,7 @@ export interface Activity {
 export interface Call {
   id: string
   leader_id: string
-  senior_id: string
+  supervisor_id: string
   scheduled_date: string
   status: 'scheduled' | 'completed' | 'rescheduled' | 'missed'
   evaluation_status: 'pending' | 'on_time' | 'late' | 'rescheduled' | 'not_done'
@@ -71,7 +71,7 @@ export interface Call {
 export interface CallSchedule {
   id: string
   leader_id: string
-  senior_id: string
+  supervisor_id: string
   monday_time?: string
   wednesday_time?: string
   friday_time?: string

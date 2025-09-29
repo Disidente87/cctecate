@@ -129,7 +129,7 @@ export const useCalls = (userId: string) => {
     try {
       const { data, error } = await supabase.rpc('create_call_schedule', {
         p_leader_id: userId,
-        p_senior_id: seniorId,
+        p_supervisor_id: seniorId,
         p_monday_time: mondayTime,
         p_wednesday_time: wednesdayTime,
         p_friday_time: fridayTime

@@ -138,7 +138,7 @@ export async function completeGoalBySenior(
       .from('goals')
       .update({
         completed: true,
-        completed_by_senior_id: seniorId,
+        completed_by_supervisor_id: seniorId,
         progress_percentage: progressPercentage,
         updated_at: new Date().toISOString()
       })

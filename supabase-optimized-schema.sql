@@ -64,7 +64,7 @@ CREATE TABLE goals (
   category TEXT NOT NULL,
   description TEXT NOT NULL,
   target_points INTEGER DEFAULT 100,
-  completed_by_senior_id UUID REFERENCES profiles(id),
+  completed_by_supervisor_id UUID REFERENCES profiles(id),
   progress_percentage DECIMAL(5,2) DEFAULT 0.00,
   is_completed BOOLEAN DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

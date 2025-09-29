@@ -2514,7 +2514,7 @@ RETURNS TABLE (
   generation TEXT,
   goals_completion_percentage DECIMAL(5,2),
   activities_completion_percentage DECIMAL(5,2),
-  calls_score DECIMAL(3,2),
+  calls_score DECIMAL(5,2),
   total_score DECIMAL(5,2),
   rank_position INTEGER
 ) AS $$
@@ -2543,14 +2543,17 @@ BEGIN
           FROM activities a
           LEFT JOIN user_activity_completions uac ON uac.activity_id = a.id AND uac.user_id = p.id
           WHERE a.is_active = true
+            AND a.unlock_date <= CURRENT_DATE  -- Solo actividades desbloqueadas
         ), 0)::DECIMAL(5,2) as activities_completion_percentage,
         COALESCE((
-          SELECT AVG(c.score)
+          -- Usar progress_percentage (porcentaje de avance - llamadas a tiempo)
+          SELECT CASE 
+            WHEN COUNT(*) = 0 THEN 0
+            ELSE ROUND((COUNT(CASE WHEN evaluation_status = 'on_time' THEN 1 END)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          END
           FROM calls c 
-          WHERE c.leader_id = p.id 
-            AND c.evaluation_status IN ('on_time','late')
-            AND c.score IS NOT NULL
-        ), 0)::DECIMAL(3,2) as calls_score
+          WHERE c.leader_id = p.id
+        ), 0)::DECIMAL(5,2) as calls_score
       FROM profiles p
       WHERE p.role = 'lider'
         AND (p_generation_filter IS NULL OR p.generation = p_generation_filter)
@@ -2564,16 +2567,16 @@ BEGIN
       ls.calls_score,
       (ls.goals_completion_percentage * 0.4 
        + ls.activities_completion_percentage * 0.3 
-       + (ls.calls_score * 100/3) * 0.3)::DECIMAL(5,2) as total_score,
+       + (ls.calls_score / 100) * 0.3)::DECIMAL(5,2) as total_score,
       ROW_NUMBER() OVER (
         ORDER BY (ls.goals_completion_percentage * 0.4 
                 + ls.activities_completion_percentage * 0.3 
-                + (ls.calls_score * 100/3) * 0.3) DESC
+                + (ls.calls_score / 100) * 0.3) DESC
       )::INTEGER as rank_position
     FROM leader_stats ls
     ORDER BY (ls.goals_completion_percentage * 0.4 
             + ls.activities_completion_percentage * 0.3 
-            + (ls.calls_score * 100/3) * 0.3) DESC;
+            + (ls.calls_score / 100) * 0.3) DESC;
 
   ELSE
     RETURN QUERY
@@ -2591,6 +2594,7 @@ BEGIN
           FROM activities a
           LEFT JOIN user_activity_completions uac ON uac.activity_id = a.id AND uac.user_id = p.id
           WHERE a.is_active = true
+            AND a.unlock_date <= CURRENT_DATE  -- Solo actividades desbloqueadas
         ), 0)::DECIMAL(5,2) as activities_completion_percentage,
         COALESCE((
           SELECT AVG(c.score) 
@@ -2598,7 +2602,7 @@ BEGIN
           WHERE c.leader_id = p.id 
             AND c.evaluation_status IN ('on_time','late')
             AND c.score IS NOT NULL
-        ), 0)::DECIMAL(3,2) as calls_score
+        ), 0)::DECIMAL(5,2) as calls_score
       FROM profiles p
       WHERE p.role = 'lider' AND p.generation = user_generation
     )
@@ -2611,16 +2615,16 @@ BEGIN
       ls.calls_score,
       (ls.goals_completion_percentage * 0.4 
        + ls.activities_completion_percentage * 0.3 
-       + (ls.calls_score * 100/3) * 0.3)::DECIMAL(5,2) as total_score,
+       + (ls.calls_score / 100) * 0.3)::DECIMAL(5,2) as total_score,
       ROW_NUMBER() OVER (
         ORDER BY (ls.goals_completion_percentage * 0.4 
                 + ls.activities_completion_percentage * 0.3 
-                + (ls.calls_score * 100/3) * 0.3) DESC
+                + (ls.calls_score / 100) * 0.3) DESC
       )::INTEGER as rank_position
     FROM leader_stats ls
     ORDER BY (ls.goals_completion_percentage * 0.4 
             + ls.activities_completion_percentage * 0.3 
-            + (ls.calls_score * 100/3) * 0.3) DESC;
+            + (ls.calls_score / 100) * 0.3) DESC;
   END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -2656,20 +2660,23 @@ BEGIN
         COALESCE((
           SELECT AVG(CASE WHEN g.completed = true THEN 100 ELSE COALESCE(calculate_goal_progress_dynamic(g.id, p.id), 0) END)
           FROM goals g WHERE g.user_id = p.id
-        ), 0) * 0.4 
+        ), 0) * 0.5 
         + COALESCE((
           SELECT (COUNT(uac.activity_id)::DECIMAL / NULLIF(COUNT(a.id), 0)) * 100
           FROM activities a
           LEFT JOIN user_activity_completions uac ON uac.activity_id = a.id AND uac.user_id = p.id
           WHERE a.is_active = true
-        ), 0) * 0.3 
+            AND a.unlock_date <= CURRENT_DATE  -- Solo actividades desbloqueadas
+        ), 0) * 0.25 
         + COALESCE((
-          SELECT AVG(c.score) 
+          -- Usar progress_percentage (porcentaje de avance - llamadas a tiempo)
+          SELECT CASE 
+            WHEN COUNT(*) = 0 THEN 0
+            ELSE ROUND((COUNT(CASE WHEN evaluation_status = 'on_time' THEN 1 END)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          END
           FROM calls c 
-          WHERE c.leader_id = p.id 
-            AND c.evaluation_status IN ('on_time','late')
-            AND c.score IS NOT NULL
-        ), 0) * (100.0/3.0) * 0.3
+          WHERE c.leader_id = p.id
+        ), 0) * 0.25
       )::DECIMAL(5,2) as total_score
     FROM profiles p
     WHERE p.role = 'lider'

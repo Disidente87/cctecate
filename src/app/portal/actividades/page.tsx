@@ -212,7 +212,8 @@ export default function ActividadesPage() {
   
   const completedCount = pastActivities.length
   const totalCurrentWeek = currentWeekActivities.length
-  const completionRate = totalCurrentWeek > 0 ? Math.round((completedCount / (completedCount + totalCurrentWeek)) * 100) : 0
+  const totalActivities = completedCount + totalCurrentWeek
+  const completionRate = totalActivities > 0 ? Math.round((completedCount / totalActivities) * 100) : 0
 
   const getCategoryColor = (category: string) => {
     switch (category) {

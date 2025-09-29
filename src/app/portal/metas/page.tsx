@@ -14,7 +14,8 @@ import {
   CheckCircle, 
   TrendingUp,
   Save,
-  X
+  X,
+  AlertCircle
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useSelectedUser } from '@/contexts/selected-user'
@@ -185,12 +186,13 @@ const frequencyLabels = {
 
 
 export default function MetasPage() {
-  const { selectedUserId, authUserId, isSenior } = useSelectedUser()
+  const { selectedUserId, authUserId, authUserRole, isSenior } = useSelectedUser()
   const { activeParticipation, isAdmin } = useActiveParticipation()
   const [goals, setGoals] = useState<GoalWithMechanisms[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<{ id: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [goalError, setGoalError] = useState<Record<string, string>>({})
   const [showAddGoal, setShowAddGoal] = useState(false)
   const [newGoal, setNewGoal] = useState({
     category: '',
@@ -304,15 +306,24 @@ export default function MetasPage() {
     const goal = goals.find(g => g.id === goalId)
     if (!goal || !user) return
 
+    // Limpiar errores previos para esta meta
+    setGoalError(prev => ({ ...prev, [goalId]: '' }))
+
     // Si se está intentando completar una meta, verificar que tenga 100% de progreso
     if (!goal.completed && goal.progress_percentage < 100) {
-      setError('No puedes marcar una meta como completada hasta que tenga 100% de progreso')
+      setGoalError(prev => ({ ...prev, [goalId]: 'No puedes marcar una meta como completada hasta que tenga 100% de progreso' }))
+      return
+    }
+
+    // Solo los supervisores pueden marcar metas como completadas
+    if (!goal.completed && authUserRole !== 'senior' && authUserRole !== 'master_senior' && authUserRole !== 'admin') {
+      setGoalError(prev => ({ ...prev, [goalId]: 'Solo tu Senior puede marcar esta meta como completada cuando alcance el 100%' }))
       return
     }
 
     const updatedGoal = await updateGoal(goalId, {
       completed: !goal.completed,
-      completed_by_senior_id: !goal.completed ? user.id : null,
+      completed_by_supervisor_id: !goal.completed ? user.id : null,
       progress_percentage: !goal.completed ? 100 : goal.progress_percentage // Mantener el progreso real al desmarcar
     })
 
@@ -325,6 +336,7 @@ export default function MetasPage() {
         setGoals(goals.map(g => g.id === goalId ? { ...g, ...updatedGoal } : g))
       }
       setError(null) // Limpiar errores al completar exitosamente
+      setGoalError(prev => ({ ...prev, [goalId]: '' })) // Limpiar error específico de esta meta
     }
   }
 
@@ -554,20 +566,7 @@ export default function MetasPage() {
     )
   }
 
-  if (error) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <p className="text-red-600 mb-4">{error}</p>
-            <Button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700 text-white">
-              Reintentar
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  // Removemos el return temprano para errores - ahora se mostrarán como alertas
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -578,6 +577,28 @@ export default function MetasPage() {
           Establece y gestiona tus objetivos personales para alcanzar tus sueños
         </p>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <X className="h-5 w-5 text-red-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => setError(null)}
+                className="inline-flex text-red-400 hover:text-red-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Selector de Participación (solo para admins) */}
       {isAdmin && (
@@ -858,7 +879,7 @@ export default function MetasPage() {
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                           {goal.mechanisms.length} mecanismos
                         </span>
-                        {goal.completed && goal.completed_by_senior_id && (
+                        {goal.completed && goal.completed_by_supervisor_id && (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             Completada por Senior
                           </span>
@@ -886,6 +907,23 @@ export default function MetasPage() {
                           ></div>
                         </div>
                       </div>
+                      
+                      {/* Mensaje de error específico para esta meta */}
+                      {goalError[goal.id] && (
+                        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-center">
+                            <AlertCircle className="h-4 w-4 text-red-400 mr-2" />
+                            <p className="text-sm text-red-800 flex-1">{goalError[goal.id]}</p>
+                            <button
+                              onClick={() => setGoalError(prev => ({ ...prev, [goal.id]: '' }))}
+                              className="ml-2 text-red-400 hover:text-red-600 transition-colors"
+                              title="Cerrar mensaje"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
