@@ -432,6 +432,7 @@ export default function ProfilePage() {
                     onClick={addEnergyGiver}
                     disabled={!newEnergyGiver.trim() || formData.energy_givers.length >= 10}
                     size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -490,6 +491,7 @@ export default function ProfilePage() {
                     onClick={addEnergyDrainer}
                     disabled={!newEnergyDrainer.trim() || formData.energy_drainers.length >= 10}
                     size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>

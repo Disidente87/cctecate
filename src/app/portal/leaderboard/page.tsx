@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
@@ -18,6 +18,8 @@ import {
 } from 'lucide-react'
 import { useLeaderboard } from '@/hooks/useLeaderboard'
 import { useUser } from '@/hooks/useUser'
+import LeaderboardWeightsConfig from '@/components/leaderboard/LeaderboardWeightsConfig'
+import { Settings } from 'lucide-react'
 
 export default function LeaderboardPage() {
   const { user } = useUser()
@@ -32,6 +34,47 @@ export default function LeaderboardPage() {
   const [selectedGeneration, setSelectedGeneration] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'total' | 'goals' | 'activities' | 'calls'>('total')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [showWeightsConfig, setShowWeightsConfig] = useState(false)
+  const [userIsAdmin, setUserIsAdmin] = useState(false)
+  const [currentWeights, setCurrentWeights] = useState<{goals: number, activities: number, calls: number} | null>(null)
+
+  // Verificar si el usuario es admin usando el objeto user directamente
+  useEffect(() => {
+    if (user?.role) {
+      const isAdmin = user.role === 'admin'
+      setUserIsAdmin(isAdmin)
+    }
+  }, [user?.role])
+
+  // Cargar pesos actuales
+  const loadCurrentWeights = useCallback(async () => {
+    if (!userIsAdmin) return
+    
+    try {
+      const { getLeaderboardWeightsConfig } = await import('@/lib/actions/leaderboard-actions')
+      const result = await getLeaderboardWeightsConfig()
+      
+      if (result.success && result.data) {
+        setCurrentWeights({
+          goals: Math.round(result.data.goals_weight * 100),
+          activities: Math.round(result.data.activities_weight * 100),
+          calls: Math.round(result.data.calls_weight * 100)
+        })
+      }
+    } catch (error) {
+      console.error('Error loading current weights:', error)
+    }
+  }, [userIsAdmin])
+
+  useEffect(() => {
+    loadCurrentWeights()
+  }, [loadCurrentWeights])
+
+  // Función para manejar actualización de pesos
+  const handleWeightsUpdated = useCallback(() => {
+    loadCurrentWeights()
+    refreshData()
+  }, [loadCurrentWeights, refreshData])
 
   // Generaciones disponibles incluyendo "Todas"
   const generations = ['all', ...availableGenerations]
@@ -128,11 +171,40 @@ export default function LeaderboardPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold ">Leaderboard</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold ">Leaderboard</h1>
+          {userIsAdmin && (
+            <div className="flex flex-col items-end">
+              <Button
+                onClick={() => setShowWeightsConfig(!showWeightsConfig)}
+                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Settings className="h-4 w-4" />
+                <span>Configurar Pesos</span>
+              </Button>
+              {currentWeights && (
+                <span className="text-sm text-gray-500 mt-1">
+                  Pesos actuales: {currentWeights.goals}-{currentWeights.activities}-{currentWeights.calls}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
         <p className=" mt-2">
           Ranking de líderes por generación y rendimiento general
         </p>
       </div>
+
+      {/* Configuración de Pesos para Admin */}
+        {showWeightsConfig && (
+          <div className="mb-8">
+            <LeaderboardWeightsConfig 
+              onWeightsUpdated={handleWeightsUpdated} 
+              onClose={() => setShowWeightsConfig(false)}
+              isAdmin={userIsAdmin} 
+            />
+          </div>
+        )}
 
       {/* Stats Overview */}
       {stats && (
@@ -244,7 +316,7 @@ export default function LeaderboardPage() {
             variant="outline"
             size="sm"
             onClick={() => handleSort('calls')}
-            className="flex items-center space-x-1"
+            className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-700 text-white"
           >
             <span>Llamadas</span>
             {getSortIcon('calls')}

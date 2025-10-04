@@ -849,7 +849,7 @@ export default function MetasPage() {
             </div>
 
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowAddGoal(false)} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button variant="outline" onClick={() => setShowAddGoal(false)}>
                 Cancelar
               </Button>
               <Button 

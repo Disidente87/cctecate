@@ -255,7 +255,7 @@ export default function LlamadasPage() {
         <div className="mb-4 flex justify-end">
           <Button
             onClick={() => setShowScheduleForm(true)}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Settings className="mr-2 h-4 w-4" />
             Configurar Horarios
@@ -280,7 +280,7 @@ export default function LlamadasPage() {
           {!callSchedule && (
             <Button
               onClick={() => setShowScheduleForm(true)}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Settings className="mr-2 h-4 w-4" />
               Configurar Horarios
@@ -344,7 +344,7 @@ export default function LlamadasPage() {
               </p>
               <Button
                 onClick={() => setShowScheduleForm(true)}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 <Settings className="mr-2 h-4 w-4" />
                 Configurar Horarios

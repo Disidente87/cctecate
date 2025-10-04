@@ -362,53 +362,49 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Función para calcular el leaderboard (MANTENER)
-CREATE OR REPLACE FUNCTION get_leaderboard_data(generation_filter TEXT DEFAULT NULL)
+-- Tabla para almacenar los pesos del sistema de scoring del leaderboard
+CREATE TABLE IF NOT EXISTS leaderboard_weights (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  goals_weight DECIMAL(3,2) NOT NULL DEFAULT 0.40 CHECK (goals_weight >= 0 AND goals_weight <= 1),
+  activities_weight DECIMAL(3,2) NOT NULL DEFAULT 0.30 CHECK (activities_weight >= 0 AND activities_weight <= 1),
+  calls_weight DECIMAL(3,2) NOT NULL DEFAULT 0.30 CHECK (calls_weight >= 0 AND calls_weight <= 1),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  -- Constraint para asegurar que los pesos sumen 1.0
+  CONSTRAINT check_weights_sum CHECK (goals_weight + activities_weight + calls_weight = 1.0)
+);
+
+-- Insertar configuración inicial
+INSERT INTO leaderboard_weights (goals_weight, activities_weight, calls_weight, is_active)
+VALUES (0.40, 0.30, 0.30, TRUE)
+ON CONFLICT DO NOTHING;
+
+-- Comentarios para documentar la tabla
+COMMENT ON TABLE leaderboard_weights IS 'Configuración de pesos para el cálculo del leaderboard';
+COMMENT ON COLUMN leaderboard_weights.goals_weight IS 'Peso para el porcentaje de completitud de metas (0.0 - 1.0)';
+COMMENT ON COLUMN leaderboard_weights.activities_weight IS 'Peso para el porcentaje de actividades completadas (0.0 - 1.0)';
+COMMENT ON COLUMN leaderboard_weights.calls_weight IS 'Peso para el score de llamadas (0.0 - 1.0)';
+COMMENT ON COLUMN leaderboard_weights.is_active IS 'Indica si esta configuración está activa';
+
+-- Función para obtener los pesos activos del leaderboard
+CREATE OR REPLACE FUNCTION get_active_leaderboard_weights()
 RETURNS TABLE (
-  user_id UUID,
-  user_name TEXT,
-  user_role TEXT,
-  total_score NUMERIC,
-  goals_completed INTEGER,
-  mechanisms_completed INTEGER,
-  activities_completed INTEGER,
-  calls_score NUMERIC
+  goals_weight DECIMAL(3,2),
+  activities_weight DECIMAL(3,2),
+  calls_weight DECIMAL(3,2)
 ) AS $$
 BEGIN
   RETURN QUERY
-  WITH user_stats AS (
-    SELECT 
-      p.id as user_id,
-      p.name as user_name,
-      p.role as user_role,
-      COALESCE(
-        (SELECT COUNT(*) FROM goals g WHERE g.user_id = p.id AND g.completed = true), 0
-      ) as goals_completed,
-      COALESCE(
-        (SELECT COUNT(*) FROM mechanisms m 
-         JOIN goals g ON g.id = m.goal_id 
-         WHERE g.user_id = p.id), 0
-      ) as mechanisms_completed,
-      COALESCE(
-        (SELECT COUNT(*) FROM user_activity_completions uac WHERE uac.user_id = p.id), 0
-      ) as activities_completed,
-      COALESCE(
-        (SELECT AVG(c.score) FROM calls c WHERE c.leader_id = p.id AND c.status = 'completed'), 0
-      ) as calls_score
-    FROM profiles p
-    WHERE (generation_filter IS NULL OR p.generation = generation_filter)
-  )
   SELECT 
-    us.user_id,
-    us.user_name,
-    us.user_role,
-    (us.goals_completed * 10 + us.mechanisms_completed * 5 + us.activities_completed * 3 + us.calls_score * 20) as total_score,
-    us.goals_completed,
-    us.mechanisms_completed,
-    us.activities_completed,
-    us.calls_score
-  FROM user_stats us
-  ORDER BY total_score DESC;
+    lw.goals_weight,
+    lw.activities_weight,
+    lw.calls_weight
+  FROM leaderboard_weights lw
+  WHERE lw.is_active = TRUE
+  ORDER BY lw.created_at DESC
+  LIMIT 1;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -1684,16 +1680,40 @@ CREATE POLICY "Authenticated users can view active activities" ON activities
 
 -- Políticas para administradores gestionar actividades
 CREATE POLICY "Admins can view all activities" ON activities
-    FOR SELECT USING (is_user_admin());
+    FOR SELECT USING (
+        auth.role() = 'authenticated' AND 
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
 
 CREATE POLICY "Admins can insert activities" ON activities
-    FOR INSERT WITH CHECK (is_user_admin());
+    FOR INSERT WITH CHECK (
+        auth.role() = 'authenticated' AND 
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
 
 CREATE POLICY "Admins can update activities" ON activities
-    FOR UPDATE USING (is_user_admin());
+    FOR UPDATE USING (
+        auth.role() = 'authenticated' AND 
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
 
 CREATE POLICY "Admins can delete activities" ON activities
-    FOR DELETE USING (is_user_admin());
+    FOR DELETE USING (
+        auth.role() = 'authenticated' AND 
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
 
 -- Políticas básicas para calls (MANTENER)
 CREATE POLICY "Users can view calls they are involved in" ON calls
@@ -2090,6 +2110,11 @@ GRANT EXECUTE ON FUNCTION update_user_profile(UUID, TEXT, TEXT, DATE, TEXT, TEXT
 GRANT EXECUTE ON FUNCTION get_user_profile(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION validate_personal_contract(TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION validate_energy_arrays(TEXT[]) TO authenticated;
+
+-- Permisos para funciones del leaderboard con pesos dinámicos
+GRANT EXECUTE ON FUNCTION get_active_leaderboard_weights() TO authenticated;
+GRANT EXECUTE ON FUNCTION update_leaderboard_weights(DECIMAL, DECIMAL, DECIMAL) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_leaderboard_weights_config() TO authenticated;
 
 -- Función para obtener el rol actual del usuario desde participaciones
 CREATE OR REPLACE FUNCTION get_user_current_role(p_user_id UUID)
@@ -2743,11 +2768,29 @@ RETURNS TABLE (
 DECLARE
   user_role TEXT;
   user_generation TEXT;
+  goals_weight DECIMAL(3,2);
+  activities_weight DECIMAL(3,2);
+  calls_weight DECIMAL(3,2);
 BEGIN
   SELECT p.role, p.generation INTO user_role, user_generation
   FROM profiles p WHERE p.id = p_user_id;
 
   IF user_role IS NULL THEN RETURN; END IF;
+
+  -- Obtener los pesos activos del leaderboard
+  SELECT lw.goals_weight, lw.activities_weight, lw.calls_weight 
+  INTO goals_weight, activities_weight, calls_weight
+  FROM leaderboard_weights lw
+  WHERE lw.is_active = TRUE
+  ORDER BY lw.created_at DESC
+  LIMIT 1;
+
+  -- Si no hay pesos configurados, usar valores por defecto
+  IF goals_weight IS NULL THEN
+    goals_weight := 0.40;
+    activities_weight := 0.30;
+    calls_weight := 0.30;
+  END IF;
 
   IF user_role = 'admin' THEN
     RETURN QUERY
@@ -2787,18 +2830,18 @@ BEGIN
       ls.goals_completion_percentage,
       ls.activities_completion_percentage,
       ls.calls_score,
-      (ls.goals_completion_percentage * 0.4 
-       + ls.activities_completion_percentage * 0.3 
-       + (ls.calls_score / 100) * 0.3)::DECIMAL(5,2) as total_score,
+      (ls.goals_completion_percentage * goals_weight 
+       + ls.activities_completion_percentage * activities_weight 
+       + (ls.calls_score / 100) * calls_weight)::DECIMAL(5,2) as total_score,
       ROW_NUMBER() OVER (
-        ORDER BY (ls.goals_completion_percentage * 0.4 
-                + ls.activities_completion_percentage * 0.3 
-                + (ls.calls_score / 100) * 0.3) DESC
+        ORDER BY (ls.goals_completion_percentage * goals_weight 
+                + ls.activities_completion_percentage * activities_weight 
+                + (ls.calls_score / 100) * calls_weight) DESC
       )::INTEGER as rank_position
     FROM leader_stats ls
-    ORDER BY (ls.goals_completion_percentage * 0.4 
-            + ls.activities_completion_percentage * 0.3 
-            + (ls.calls_score / 100) * 0.3) DESC;
+    ORDER BY (ls.goals_completion_percentage * goals_weight 
+            + ls.activities_completion_percentage * activities_weight 
+            + (ls.calls_score / 100) * calls_weight) DESC;
 
   ELSE
     RETURN QUERY
@@ -2835,19 +2878,99 @@ BEGIN
       ls.goals_completion_percentage,
       ls.activities_completion_percentage,
       ls.calls_score,
-      (ls.goals_completion_percentage * 0.4 
-       + ls.activities_completion_percentage * 0.3 
-       + (ls.calls_score / 100) * 0.3)::DECIMAL(5,2) as total_score,
+      (ls.goals_completion_percentage * goals_weight 
+       + ls.activities_completion_percentage * activities_weight 
+       + (ls.calls_score / 100) * calls_weight)::DECIMAL(5,2) as total_score,
       ROW_NUMBER() OVER (
-        ORDER BY (ls.goals_completion_percentage * 0.4 
-                + ls.activities_completion_percentage * 0.3 
-                + (ls.calls_score / 100) * 0.3) DESC
+        ORDER BY (ls.goals_completion_percentage * goals_weight 
+                + ls.activities_completion_percentage * activities_weight 
+                + (ls.calls_score / 100) * calls_weight) DESC
       )::INTEGER as rank_position
     FROM leader_stats ls
-    ORDER BY (ls.goals_completion_percentage * 0.4 
-            + ls.activities_completion_percentage * 0.3 
-            + (ls.calls_score / 100) * 0.3) DESC;
+    ORDER BY (ls.goals_completion_percentage * goals_weight 
+            + ls.activities_completion_percentage * activities_weight 
+            + (ls.calls_score / 100) * calls_weight) DESC;
   END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para actualizar los pesos del leaderboard (solo admins)
+CREATE OR REPLACE FUNCTION update_leaderboard_weights(
+  p_goals_weight DECIMAL(3,2),
+  p_activities_weight DECIMAL(3,2),
+  p_calls_weight DECIMAL(3,2)
+)
+RETURNS TABLE (
+  success BOOLEAN,
+  message TEXT
+) AS $$
+DECLARE
+  v_is_admin BOOLEAN;
+  v_total_weight DECIMAL(3,2);
+BEGIN
+  -- Verificar que el usuario actual es admin
+  SELECT is_user_admin() INTO v_is_admin;
+  
+  IF NOT v_is_admin THEN
+    RETURN QUERY SELECT FALSE, 'Solo los administradores pueden modificar los pesos del leaderboard';
+    RETURN;
+  END IF;
+  
+  -- Verificar que los pesos sumen 1.0
+  v_total_weight := p_goals_weight + p_activities_weight + p_calls_weight;
+  
+  IF v_total_weight != 1.0 THEN
+    RETURN QUERY SELECT FALSE, 'Los pesos deben sumar exactamente 1.0 (100%). Actual: ' || v_total_weight;
+    RETURN;
+  END IF;
+  
+  -- Verificar que todos los pesos estén en el rango válido
+  IF p_goals_weight < 0 OR p_goals_weight > 1 OR 
+     p_activities_weight < 0 OR p_activities_weight > 1 OR
+     p_calls_weight < 0 OR p_calls_weight > 1 THEN
+    RETURN QUERY SELECT FALSE, 'Los pesos deben estar entre 0.0 y 1.0';
+    RETURN;
+  END IF;
+  
+  -- Desactivar configuración actual
+  UPDATE leaderboard_weights SET is_active = FALSE WHERE is_active = TRUE;
+  
+  -- Crear nueva configuración
+  INSERT INTO leaderboard_weights (goals_weight, activities_weight, calls_weight, is_active, created_by)
+  VALUES (p_goals_weight, p_activities_weight, p_calls_weight, TRUE, auth.uid());
+  
+  RETURN QUERY SELECT TRUE, 'Pesos del leaderboard actualizados exitosamente';
+  
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN QUERY SELECT FALSE, 'Error al actualizar los pesos: ' || SQLERRM;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para obtener la configuración actual de pesos
+CREATE OR REPLACE FUNCTION get_leaderboard_weights_config()
+RETURNS TABLE (
+  goals_weight DECIMAL(3,2),
+  activities_weight DECIMAL(3,2),
+  calls_weight DECIMAL(3,2),
+  total_weight DECIMAL(3,2),
+  last_updated TIMESTAMP WITH TIME ZONE,
+  updated_by_name TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    lw.goals_weight,
+    lw.activities_weight,
+    lw.calls_weight,
+    (lw.goals_weight + lw.activities_weight + lw.calls_weight) as total_weight,
+    lw.updated_at,
+    COALESCE(p.name, 'Sistema') as updated_by_name
+  FROM leaderboard_weights lw
+  LEFT JOIN profiles p ON p.id = lw.created_by
+  WHERE lw.is_active = TRUE
+  ORDER BY lw.created_at DESC
+  LIMIT 1;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -2923,3 +3046,184 @@ BEGIN
     COALESCE((SELECT AVG(goals_completion_percentage) FROM leader_stats), 0)::DECIMAL(5,2) as average_goals_completion;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =====================================================
+-- SISTEMA DE PESOS DINÁMICOS DEL LEADERBOARD
+-- =====================================================
+-- Este sistema permite a los administradores configurar
+-- los pesos para el cálculo del leaderboard de forma dinámica
+-- =====================================================
+
+-- Tabla para almacenar los pesos del sistema de scoring del leaderboard
+CREATE TABLE IF NOT EXISTS leaderboard_weights (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  goals_weight DECIMAL(3,2) NOT NULL DEFAULT 0.40 CHECK (goals_weight >= 0 AND goals_weight <= 1),
+  activities_weight DECIMAL(3,2) NOT NULL DEFAULT 0.30 CHECK (activities_weight >= 0 AND activities_weight <= 1),
+  calls_weight DECIMAL(3,2) NOT NULL DEFAULT 0.30 CHECK (calls_weight >= 0 AND calls_weight <= 1),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  -- Constraint para asegurar que los pesos sumen 1.0
+  CONSTRAINT check_weights_sum CHECK (goals_weight + activities_weight + calls_weight = 1.0)
+);
+
+-- Insertar configuración inicial si no existe
+INSERT INTO leaderboard_weights (goals_weight, activities_weight, calls_weight, is_active)
+SELECT 0.40, 0.30, 0.30, TRUE
+WHERE NOT EXISTS (SELECT 1 FROM leaderboard_weights WHERE is_active = TRUE);
+
+-- Comentarios para documentar la tabla
+COMMENT ON TABLE leaderboard_weights IS 'Configuración de pesos para el cálculo del leaderboard';
+COMMENT ON COLUMN leaderboard_weights.goals_weight IS 'Peso para el porcentaje de completitud de metas (0.0 - 1.0)';
+COMMENT ON COLUMN leaderboard_weights.activities_weight IS 'Peso para el porcentaje de actividades completadas (0.0 - 1.0)';
+COMMENT ON COLUMN leaderboard_weights.calls_weight IS 'Peso para el score de llamadas (0.0 - 1.0)';
+COMMENT ON COLUMN leaderboard_weights.is_active IS 'Indica si esta configuración está activa';
+
+-- Función para obtener los pesos activos del leaderboard
+CREATE OR REPLACE FUNCTION get_active_leaderboard_weights()
+RETURNS TABLE (
+  goals_weight DECIMAL(3,2),
+  activities_weight DECIMAL(3,2),
+  calls_weight DECIMAL(3,2)
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    lw.goals_weight,
+    lw.activities_weight,
+    lw.calls_weight
+  FROM leaderboard_weights lw
+  WHERE lw.is_active = TRUE
+  ORDER BY lw.created_at DESC
+  LIMIT 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para actualizar los pesos del leaderboard (solo admins)
+CREATE OR REPLACE FUNCTION update_leaderboard_weights(
+  p_goals_weight DECIMAL(3,2),
+  p_activities_weight DECIMAL(3,2),
+  p_calls_weight DECIMAL(3,2)
+)
+RETURNS TABLE (
+  success BOOLEAN,
+  message TEXT
+) AS $$
+DECLARE
+  v_is_admin BOOLEAN;
+  v_total_weight DECIMAL(3,2);
+BEGIN
+  -- Verificar que el usuario actual es admin
+  SELECT is_user_admin() INTO v_is_admin;
+  
+  IF NOT v_is_admin THEN
+    RETURN QUERY SELECT FALSE, 'Solo los administradores pueden modificar los pesos del leaderboard';
+    RETURN;
+  END IF;
+  
+  -- Verificar que los pesos sumen 1.0
+  v_total_weight := p_goals_weight + p_activities_weight + p_calls_weight;
+  
+  IF v_total_weight != 1.0 THEN
+    RETURN QUERY SELECT FALSE, 'Los pesos deben sumar exactamente 1.0 (100%). Actual: ' || v_total_weight;
+    RETURN;
+  END IF;
+  
+  -- Verificar que todos los pesos estén en el rango válido
+  IF p_goals_weight < 0 OR p_goals_weight > 1 OR 
+     p_activities_weight < 0 OR p_activities_weight > 1 OR
+     p_calls_weight < 0 OR p_calls_weight > 1 THEN
+    RETURN QUERY SELECT FALSE, 'Los pesos deben estar entre 0.0 y 1.0';
+    RETURN;
+  END IF;
+  
+  -- Desactivar configuración actual
+  UPDATE leaderboard_weights SET is_active = FALSE WHERE is_active = TRUE;
+  
+  -- Crear nueva configuración
+  INSERT INTO leaderboard_weights (goals_weight, activities_weight, calls_weight, is_active, created_by)
+  VALUES (p_goals_weight, p_activities_weight, p_calls_weight, TRUE, auth.uid());
+  
+  RETURN QUERY SELECT TRUE, 'Pesos del leaderboard actualizados exitosamente';
+  
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN QUERY SELECT FALSE, 'Error al actualizar los pesos: ' || SQLERRM;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función para obtener la configuración actual de pesos
+CREATE OR REPLACE FUNCTION get_leaderboard_weights_config()
+RETURNS TABLE (
+  goals_weight DECIMAL(3,2),
+  activities_weight DECIMAL(3,2),
+  calls_weight DECIMAL(3,2),
+  total_weight DECIMAL(3,2),
+  last_updated TIMESTAMP WITH TIME ZONE,
+  updated_by_name TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    lw.goals_weight,
+    lw.activities_weight,
+    lw.calls_weight,
+    (lw.goals_weight + lw.activities_weight + lw.calls_weight) as total_weight,
+    lw.updated_at,
+    COALESCE(p.name, 'Sistema') as updated_by_name
+  FROM leaderboard_weights lw
+  LEFT JOIN profiles p ON p.id = lw.created_by
+  WHERE lw.is_active = TRUE
+  ORDER BY lw.created_at DESC
+  LIMIT 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Habilitar RLS en la tabla leaderboard_weights
+ALTER TABLE leaderboard_weights ENABLE ROW LEVEL SECURITY;
+
+-- Política para que todos los usuarios autenticados puedan leer la configuración activa
+CREATE POLICY "Allow authenticated users to read active weights" ON leaderboard_weights
+  FOR SELECT USING (auth.role() = 'authenticated' AND is_active = TRUE);
+
+-- Política para que solo admins puedan insertar nuevas configuraciones
+CREATE POLICY "Allow admins to insert weights" ON leaderboard_weights
+  FOR INSERT WITH CHECK (
+    auth.role() = 'authenticated' AND 
+    EXISTS (
+      SELECT 1 FROM profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Política para que solo admins puedan actualizar configuraciones
+CREATE POLICY "Allow admins to update weights" ON leaderboard_weights
+  FOR UPDATE USING (
+    auth.role() = 'authenticated' AND 
+    EXISTS (
+      SELECT 1 FROM profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Otorgar permisos adicionales para las funciones del sistema de pesos
+GRANT EXECUTE ON FUNCTION get_active_leaderboard_weights() TO authenticated;
+GRANT EXECUTE ON FUNCTION update_leaderboard_weights(DECIMAL, DECIMAL, DECIMAL) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_leaderboard_weights_config() TO authenticated;
+
+-- =====================================================
+-- CONFIRMACIÓN FINAL
+-- =====================================================
+
+-- Verificar que el sistema de pesos dinámicos esté funcionando
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM leaderboard_weights WHERE is_active = TRUE) THEN
+    RAISE EXCEPTION 'Error: No se pudo configurar el sistema de pesos dinámicos';
+  END IF;
+  
+  RAISE NOTICE 'Sistema de pesos dinámicos del leaderboard configurado correctamente';
+  RAISE NOTICE 'Configuracion inicial: Metas 40%%, Actividades 30%%, Llamadas 30%%';
+  RAISE NOTICE 'Los administradores pueden modificar los pesos desde la interfaz web';
+END $$;

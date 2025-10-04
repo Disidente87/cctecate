@@ -240,38 +240,6 @@ export default function PortalDashboard() {
         </div>
       </div>
 
-      {/* Role-specific content */}
-      {userRole === 'admin' && (
-        <div className="mt-8">
-          <Card className="border-amber-200 bg-amber-50">
-            <CardHeader>
-              <CardTitle className="">Panel de Administración</CardTitle>
-              <CardDescription className="">
-                Acceso completo al sistema de gestión
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-4">
-                <Link href="/portal/admin/generations">
-                  <Button variant="outline" className="bg-blue-600 hover:bg-blue-700 text-white">
-                    Gestionar Generaciones
-                  </Button>
-                </Link>
-                <Link href="/portal/admin/users">
-                  <Button variant="outline" className="bg-blue-600 hover:bg-blue-700 text-white">
-                    Gestionar Usuarios
-                  </Button>
-                </Link>
-                <Link href="/portal/admin/activities">
-                  <Button variant="outline" className="bg-blue-600 hover:bg-blue-700 text-white">
-                    Configurar Actividades
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </div>
   )
 }

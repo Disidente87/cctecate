@@ -1,7 +1,6 @@
 'use server'
 
-import { createServerActionClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import type { ActionResponse } from '@/types/actions'
@@ -42,7 +41,7 @@ export async function updateUserProfile(
   formData: FormData
 ): Promise<ActionResponse<null>> {
   try {
-    const supabase = createServerActionClient({ cookies })
+    const supabase = await createClient()
     
     // Verificar autenticación
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -148,7 +147,7 @@ export async function updateUserProfile(
 
 export async function getUserProfile(): Promise<ActionResponse<Record<string, unknown>>> {
   try {
-    const supabase = createServerActionClient({ cookies })
+    const supabase = await createClient()
     
     // Verificar autenticación
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -193,7 +192,7 @@ export async function addEnergyItem(
   item: string
 ): Promise<ActionResponse<string[]>> {
   try {
-    const supabase = createServerActionClient({ cookies })
+    const supabase = await createClient()
     
     // Verificar autenticación
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -281,7 +280,7 @@ export async function removeEnergyItem(
   index: number
 ): Promise<ActionResponse<string[]>> {
   try {
-    const supabase = createServerActionClient({ cookies })
+    const supabase = await createClient()
     
     // Verificar autenticación
     const { data: { user }, error: authError } = await supabase.auth.getUser()

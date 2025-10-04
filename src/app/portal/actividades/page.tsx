@@ -282,7 +282,7 @@ export default function ActividadesPage() {
           {isAdmin && (
             <Button
               onClick={() => setShowAddForm(true)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Plus className="h-4 w-4" />
               Nueva Actividad
@@ -368,7 +368,7 @@ export default function ActividadesPage() {
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar categoría" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white border border-gray-200 shadow-lg">
                     <SelectItem value="Bienestar">Bienestar</SelectItem>
                     <SelectItem value="Salud">Salud</SelectItem>
                     <SelectItem value="Relaciones">Relaciones</SelectItem>
@@ -409,7 +409,7 @@ export default function ActividadesPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleAddActivity} disabled={!newActivity.title || !newActivity.description}>
+              <Button onClick={handleAddActivity} disabled={!newActivity.title || !newActivity.description} className="bg-blue-600 hover:bg-blue-700 text-white">
                 <Save className="h-4 w-4 mr-2" />
                 Guardar
               </Button>
@@ -532,7 +532,7 @@ export default function ActividadesPage() {
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-white border border-gray-200 shadow-lg">
                             <SelectItem value="Bienestar">Bienestar</SelectItem>
                             <SelectItem value="Salud">Salud</SelectItem>
                             <SelectItem value="Relaciones">Relaciones</SelectItem>
@@ -740,7 +740,7 @@ export default function ActividadesPage() {
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-white border border-gray-200 shadow-lg">
                             <SelectItem value="Bienestar">Bienestar</SelectItem>
                             <SelectItem value="Salud">Salud</SelectItem>
                             <SelectItem value="Relaciones">Relaciones</SelectItem>
