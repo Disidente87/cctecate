@@ -23,7 +23,7 @@ import { CallCalendarItem } from '@/types'
 import { getLocalTimeFromTimestamp } from '@/utils/timezone'
 
 export default function LlamadasPage() {
-  const { selectedUserId } = useSelectedUser()
+  const { selectedUserId, authUserRole } = useSelectedUser()
   const {
     callSchedule,
     statistics,
@@ -56,6 +56,9 @@ export default function LlamadasPage() {
   const [showEvaluationModal, setShowEvaluationModal] = useState(false)
   const [selectedCall, setSelectedCall] = useState<CallCalendarItem | null>(null)
 
+  // Solo supervisores pueden evaluar llamadas
+  const canEvaluateCalls = authUserRole === 'senior' || authUserRole === 'master_senior' || authUserRole === 'admin'
+
   const handleCreateSchedule = async (seniorId: string, mondayTime?: string, wednesdayTime?: string, fridayTime?: string) => {
     try {
       await createCallSchedule(seniorId, mondayTime, wednesdayTime, fridayTime)
@@ -80,7 +83,7 @@ export default function LlamadasPage() {
   }
 
   const handleCallClick = (call: CallCalendarItem) => {
-    if (call.evaluation_status === 'pending' && !call.is_future) {
+    if (call.evaluation_status === 'pending' && !call.is_future && canEvaluateCalls) {
       setSelectedCall(call)
       setShowEvaluationModal(true)
     }
@@ -212,25 +215,32 @@ export default function LlamadasPage() {
                       </p>
                     </div>
                   </div>
-                  <Button
-                    onClick={() => {
-                      const callItem: CallCalendarItem = {
-                        call_id: call.call_id,
-                        scheduled_time: call.scheduled_date,
-                        senior_name: call.senior_name,
-                        evaluation_status: 'pending',
-                        score: 0,
-                        color_code: 'blue',
-                        is_pending: true,
-                        is_future: false,
-                        date: call.scheduled_date.split('T')[0]
-                      }
-                      handleCallClick(callItem)
-                    }}
-                    className="bg-orange-600 hover:bg-orange-700"
-                  >
-                    Evaluar
-                  </Button>
+                  {canEvaluateCalls && (
+                    <Button
+                      onClick={() => {
+                        const callItem: CallCalendarItem = {
+                          call_id: call.call_id,
+                          scheduled_time: call.scheduled_date,
+                          senior_name: call.senior_name,
+                          evaluation_status: 'pending',
+                          score: 0,
+                          color_code: 'blue',
+                          is_pending: true,
+                          is_future: false,
+                          date: call.scheduled_date.split('T')[0]
+                        }
+                        handleCallClick(callItem)
+                      }}
+                      className="bg-orange-600 hover:bg-orange-700"
+                    >
+                      Evaluar
+                    </Button>
+                  )}
+                  {!canEvaluateCalls && (
+                    <div className="text-sm text-gray-500 px-3 py-2">
+                      Tu Senior evaluará esta llamada
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -259,6 +269,7 @@ export default function LlamadasPage() {
         <CallCalendar 
           userId={selectedUserId} 
           onCallClick={handleCallClick}
+          canEvaluateCalls={canEvaluateCalls}
         />
       </div>
 

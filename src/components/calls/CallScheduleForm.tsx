@@ -40,14 +40,14 @@ export function CallScheduleForm({ isOpen, onClose, onSubmit }: CallScheduleForm
         
         // Si tiene un supervisor asignado (senior, master_senior o admin)
         if (user?.supervisor_id) {
+          // Usar función RPC para obtener supervisor con permisos correctos
           const { data: supervisor } = await supabase
-            .from('profiles')
-            .select('id, name, email')
-            .eq('id', user.supervisor_id)
-            .single()
-          if (supervisor) {
-            setAssignedSenior(supervisor)
-            setSelectedSenior(supervisor.id)
+            .rpc('get_user_supervisor', { p_user_id: selectedUserId })
+            
+          if (supervisor && supervisor.length > 0) {
+            const supervisorData = supervisor[0]
+            setAssignedSenior(supervisorData)
+            setSelectedSenior(supervisorData.id)
             return
           }
         }

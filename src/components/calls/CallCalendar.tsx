@@ -13,6 +13,7 @@ import { getLocalTimeFromTimestamp } from '@/utils/timezone'
 interface CallCalendarProps {
   userId: string
   onCallClick: (call: CallCalendarItem) => void
+  canEvaluateCalls?: boolean
 }
 
 const colorClasses = {
@@ -23,7 +24,7 @@ const colorClasses = {
   gray: 'bg-gray-400 text-white'
 }
 
-export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
+export function CallCalendar({ userId, onCallClick, canEvaluateCalls = false }: CallCalendarProps) {
   const [anchorDate, setAnchorDate] = useState(new Date())
   const [calendarData, setCalendarData] = useState<CallCalendarItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -167,11 +168,12 @@ export function CallCalendar({ userId, onCallClick }: CallCalendarProps) {
                       {calls.map((call, index) => (
                         <button
                           key={`${call.call_id}-${index}`}
-                          onClick={() => onCallClick(call)}
+                          onClick={() => canEvaluateCalls && onCallClick(call)}
                           className={`
                             w-full text-xs p-1 rounded text-left truncate
                             ${colorClasses[call.color_code as keyof typeof colorClasses] || 'bg-gray-400 text-white'}
-                            hover:opacity-80 transition-opacity
+                            ${canEvaluateCalls ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'cursor-default'}
+                            ${!canEvaluateCalls && call.evaluation_status === 'pending' ? 'opacity-60' : ''}
                           `}
                           title={`${call.senior_name} - ${getTimeFromTimestamp(call.scheduled_time)}`}
                         >

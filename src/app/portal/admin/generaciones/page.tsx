@@ -10,7 +10,7 @@ export default function GeneracionesAdminPage() {
   const [generations, setGenerations] = useState<Generation[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [editingGeneration, setEditingGeneration] = useState<Generation | null>(null)
+  const [editingGenerationId, setEditingGenerationId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -53,8 +53,8 @@ export default function GeneracionesAdminPage() {
         pl3_training_date: formData.pl3_training_date || null,
       }
 
-      if (editingGeneration) {
-        await updateGeneration(editingGeneration.id, generationData)
+      if (editingGenerationId) {
+        await updateGeneration(editingGenerationId, generationData)
       } else {
         await createGeneration(generationData)
       }
@@ -83,7 +83,7 @@ export default function GeneracionesAdminPage() {
       pl3_training_date: '',
       is_active: true
     })
-    setEditingGeneration(null)
+    setEditingGenerationId(null)
     setShowForm(false)
   }
 
@@ -102,8 +102,7 @@ export default function GeneracionesAdminPage() {
       pl3_training_date: generation.pl3_training_date?.split('T')[0] || '',
       is_active: generation.is_active
     })
-    setEditingGeneration(generation)
-    setShowForm(true)
+    setEditingGenerationId(generation.id)
   }
 
   const formatDate = (dateString: string) => {
@@ -120,6 +119,189 @@ export default function GeneracionesAdminPage() {
     const end = new Date(generation.registration_end_date)
     return now >= start && now <= end
   }
+
+  const renderEditForm = () => (
+    <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+      <h4 className="text-lg font-medium mb-4">Editar Generación</h4>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Nombre de la Generación
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Ej: C1, C2, C3..."
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Descripción
+            </label>
+            <input
+              type="text"
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Descripción de la generación"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Inicio de Registro
+            </label>
+            <input
+              type="date"
+              value={formData.registration_start_date}
+              onChange={(e) => setFormData({...formData, registration_start_date: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Fin de Registro
+            </label>
+            <input
+              type="date"
+              value={formData.registration_end_date}
+              onChange={(e) => setFormData({...formData, registration_end_date: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Inicio de Generación
+            </label>
+            <input
+              type="date"
+              value={formData.generation_start_date}
+              onChange={(e) => setFormData({...formData, generation_start_date: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Graduación
+            </label>
+            <input
+              type="date"
+              value={formData.generation_graduation_date}
+              onChange={(e) => setFormData({...formData, generation_graduation_date: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Entrenamiento Básico
+            </label>
+            <input
+              type="date"
+              value={formData.basic_training_date}
+              onChange={(e) => setFormData({...formData, basic_training_date: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Entrenamiento Avanzado
+            </label>
+            <input
+              type="date"
+              value={formData.advanced_training_date}
+              onChange={(e) => setFormData({...formData, advanced_training_date: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              PL1 (Opcional)
+            </label>
+            <input
+              type="date"
+              value={formData.pl1_training_date}
+              onChange={(e) => setFormData({...formData, pl1_training_date: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              PL2 (Opcional)
+            </label>
+            <input
+              type="date"
+              value={formData.pl2_training_date}
+              onChange={(e) => setFormData({...formData, pl2_training_date: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              PL3 (Opcional)
+            </label>
+            <input
+              type="date"
+              value={formData.pl3_training_date}
+              onChange={(e) => setFormData({...formData, pl3_training_date: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="is_active"
+            checked={formData.is_active}
+            onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+            className="h-4 w-4 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <label htmlFor="is_active" className="text-sm font-medium">
+            Generación activa
+          </label>
+        </div>
+
+        <div className="flex space-x-4">
+          <Button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            disabled={loading}
+          >
+            {loading ? 'Guardando...' : 'Actualizar'}
+          </Button>
+          <Button
+            type="button"
+            onClick={resetForm}
+            variant="outline"
+            className="border-gray-300 hover:bg-gray-50"
+          >
+            Cancelar
+          </Button>
+        </div>
+      </form>
+    </div>
+  )
 
   if (loading && generations.length === 0) {
     return (
@@ -140,7 +322,10 @@ export default function GeneracionesAdminPage() {
           <p className=" mt-2">Administra las fechas y configuraciones de las generaciones</p>
         </div>
         <Button
-          onClick={() => setShowForm(true)}
+          onClick={() => {
+            setEditingGenerationId(null)
+            setShowForm(true)
+          }}
           className="bg-blue-600 hover:bg-blue-700 text-white"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -148,14 +333,14 @@ export default function GeneracionesAdminPage() {
         </Button>
       </div>
 
-      {showForm && (
+      {showForm && !editingGenerationId && (
         <Card>
           <CardHeader>
             <CardTitle className="">
-              {editingGeneration ? 'Editar Generación' : 'Nueva Generación'}
+              Nueva Generación
             </CardTitle>
             <CardDescription className="">
-              {editingGeneration ? 'Modifica los datos de la generación' : 'Crea una nueva generación con sus fechas'}
+              Crea una nueva generación con sus fechas
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -324,7 +509,7 @@ export default function GeneracionesAdminPage() {
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                   disabled={loading}
                 >
-                  {loading ? 'Guardando...' : editingGeneration ? 'Actualizar' : 'Crear'}
+                  {loading ? 'Guardando...' : 'Crear'}
                 </Button>
                 <Button
                   type="button"
@@ -358,49 +543,55 @@ export default function GeneracionesAdminPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="text-sm">
-                <div className="flex items-center  mb-1">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  <span className="font-medium">Registro:</span>
-                </div>
-                <p className="ml-6 ">
-                  {formatDate(generation.registration_start_date)} - {formatDate(generation.registration_end_date)}
-                </p>
-              </div>
+              {editingGenerationId === generation.id ? (
+                renderEditForm()
+              ) : (
+                <>
+                  <div className="text-sm">
+                    <div className="flex items-center  mb-1">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      <span className="font-medium">Registro:</span>
+                    </div>
+                    <p className="ml-6 ">
+                      {formatDate(generation.registration_start_date)} - {formatDate(generation.registration_end_date)}
+                    </p>
+                  </div>
 
-              <div className="text-sm">
-                <div className="flex items-center  mb-1">
-                  <Users className="h-4 w-4 mr-2" />
-                  <span className="font-medium">Generación:</span>
-                </div>
-                <p className="ml-6 ">
-                  {formatDate(generation.generation_start_date)} - {formatDate(generation.generation_graduation_date)}
-                </p>
-              </div>
+                  <div className="text-sm">
+                    <div className="flex items-center  mb-1">
+                      <Users className="h-4 w-4 mr-2" />
+                      <span className="font-medium">Generación:</span>
+                    </div>
+                    <p className="ml-6 ">
+                      {formatDate(generation.generation_start_date)} - {formatDate(generation.generation_graduation_date)}
+                    </p>
+                  </div>
 
-              <div className="text-sm">
-                <div className="flex items-center  mb-1">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  <span className="font-medium">Entrenamientos:</span>
-                </div>
-                <div className="ml-6 space-y-1 ">
-                  <p>Básico: {formatDate(generation.basic_training_date)}</p>
-                  <p>Avanzado: {formatDate(generation.advanced_training_date)}</p>
-                  {generation.pl1_training_date && <p>PL1: {formatDate(generation.pl1_training_date)}</p>}
-                  {generation.pl2_training_date && <p>PL2: {formatDate(generation.pl2_training_date)}</p>}
-                  {generation.pl3_training_date && <p>PL3: {formatDate(generation.pl3_training_date)}</p>}
-                </div>
-              </div>
+                  <div className="text-sm">
+                    <div className="flex items-center  mb-1">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      <span className="font-medium">Entrenamientos:</span>
+                    </div>
+                    <div className="ml-6 space-y-1 ">
+                      <p>Básico: {formatDate(generation.basic_training_date)}</p>
+                      <p>Avanzado: {formatDate(generation.advanced_training_date)}</p>
+                      {generation.pl1_training_date && <p>PL1: {formatDate(generation.pl1_training_date)}</p>}
+                      {generation.pl2_training_date && <p>PL2: {formatDate(generation.pl2_training_date)}</p>}
+                      {generation.pl3_training_date && <p>PL3: {formatDate(generation.pl3_training_date)}</p>}
+                    </div>
+                  </div>
 
-              <Button
-                onClick={() => handleEdit(generation)}
-                variant="outline"
-                size="sm"
-                className="w-full border-gray-300  hover:bg-gray-50"
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Editar
-              </Button>
+                  <Button
+                    onClick={() => handleEdit(generation)}
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-gray-300  hover:bg-gray-50"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Editar
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -413,7 +604,10 @@ export default function GeneracionesAdminPage() {
             <h3 className="text-lg font-medium  mb-2">No hay generaciones</h3>
             <p className=" mb-4">Crea la primera generación para comenzar</p>
             <Button
-              onClick={() => setShowForm(true)}
+              onClick={() => {
+                setEditingGenerationId(null)
+                setShowForm(true)
+              }}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Plus className="h-4 w-4 mr-2" />

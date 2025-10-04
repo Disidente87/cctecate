@@ -76,6 +76,7 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
   }
 
   const baseNavigation = [
+    { name: 'Mi Perfil', href: '/portal/perfil', icon: User },
     { name: 'Dashboard', href: '/portal', icon: Home },
     { name: 'Metas', href: '/portal/metas', icon: Target },
     { name: 'Calendario', href: '/portal/calendario', icon: Calendar },
@@ -89,8 +90,9 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
     { name: 'Generaciones', href: '/portal/generaciones', icon: GraduationCap },
   ]
 
+  // Para admin, excluir "Mi Perfil" y agregar las opciones de admin
   const navigation = userRole === 'admin' 
-    ? [...baseNavigation, ...adminNavigation]
+    ? [baseNavigation[1], ...baseNavigation.slice(2), ...adminNavigation] // Excluir Mi Perfil (índice 0)
     : baseNavigation
 
   return (

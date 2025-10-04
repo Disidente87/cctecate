@@ -16,8 +16,10 @@ export interface RecentActivity {
   title: string
   completed: boolean
   date: string
-  type: 'goal' | 'activity' | 'call'
+  timestamp: number
+  type: 'goal' | 'activity' | 'call' | 'mechanism'
 }
+
 
 export function useDashboard(userId: string) {
   const [stats, setStats] = useState<DashboardStats>({
@@ -40,13 +42,18 @@ export function useDashboard(userId: string) {
         setLoading(true)
         setError(null)
 
+        // Obtener fecha de hoy para filtrar actividades desbloqueadas
+        const today = new Date().toISOString().split('T')[0] // Formato YYYY-MM-DD
+
         // Cargar datos en paralelo
         const [
           goalsData,
           activitiesData,
           callsData,
           leaderboardData,
-          recentActivitiesData
+          mechanismsData,
+          callsRecentData,
+          activitiesRecentData
         ] = await Promise.all([
           // Metas completadas
           supabase
@@ -54,7 +61,7 @@ export function useDashboard(userId: string) {
             .select('id, completed, created_at')
             .eq('user_id', userId),
           
-          // Actividades completadas
+          // Actividades completadas (solo las desbloqueadas)
           supabase
             .from('user_activity_completions')
             .select(`
@@ -63,16 +70,18 @@ export function useDashboard(userId: string) {
               activities!inner(
                 id,
                 title,
-                is_active
+                is_active,
+                unlock_date
               )
             `)
-            .eq('user_id', userId),
+            .eq('user_id', userId)
+            .lte('activities.unlock_date', today), // Solo actividades desbloqueadas
           
-          // Llamadas del mes actual
+          // Llamadas del mes actual (funciona para líderes, seniors y master seniors)
           supabase
             .from('calls')
-            .select('id, scheduled_date, evaluation_status')
-            .eq('leader_id', userId)
+            .select('id, scheduled_date, evaluation_status, leader_id, supervisor_id')
+            .or(`leader_id.eq.${userId},supervisor_id.eq.${userId}`)
             .gte('scheduled_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
           
           // Posición en leaderboard
@@ -81,7 +90,43 @@ export function useDashboard(userId: string) {
             p_generation_filter: null
           }),
           
-          // Actividades recientes (últimas 5)
+          // Mecanismos completados recientes
+          supabase
+            .from('mechanism_completions')
+            .select(`
+              id,
+              completed_at,
+              mechanisms!inner(
+                id,
+                description,
+                goals!inner(
+                  id,
+                  description
+                )
+              )
+            `)
+            .eq('user_id', userId)
+            .order('completed_at', { ascending: false })
+            .limit(10),
+          
+          // Llamadas completadas recientes (funciona para líderes, seniors y master seniors)
+          supabase
+            .from('calls')
+            .select(`
+              id,
+              scheduled_date,
+              updated_at,
+              evaluation_status,
+              score,
+              leader_id,
+              supervisor_id
+            `)
+            .or(`leader_id.eq.${userId},supervisor_id.eq.${userId}`)
+            .in('evaluation_status', ['on_time', 'late', 'rescheduled', 'not_done'])
+            .order('updated_at', { ascending: false })
+            .limit(10),
+          
+          // Actividades completadas recientes (solo las desbloqueadas)
           supabase
             .from('user_activity_completions')
             .select(`
@@ -89,12 +134,14 @@ export function useDashboard(userId: string) {
               completed_at,
               activities!inner(
                 id,
-                title
+                title,
+                unlock_date
               )
             `)
             .eq('user_id', userId)
+            .lte('activities.unlock_date', today) // Solo actividades desbloqueadas
             .order('completed_at', { ascending: false })
-            .limit(5)
+            .limit(10)
         ])
 
         // Procesar datos de metas
@@ -106,11 +153,12 @@ export function useDashboard(userId: string) {
         const activities = activitiesData.data || []
         const activitiesCompleted = activities.length
         
-        // Obtener total de actividades activas
+        // Obtener total de actividades activas y desbloqueadas
         const { data: totalActivitiesData } = await supabase
           .from('activities')
           .select('id')
           .eq('is_active', true)
+          .lte('unlock_date', today) // Solo actividades desbloqueadas
         const totalActivities = totalActivitiesData?.length || 0
 
         // Procesar datos de llamadas
@@ -122,32 +170,59 @@ export function useDashboard(userId: string) {
         const userPosition = leaderboard.findIndex((user: LeaderboardEntry) => user.user_id === userId) + 1
         const leaderboardPosition = userPosition || 0
 
-        // Procesar actividades recientes
-        const recent = recentActivitiesData.data || []
-        const formattedRecentActivities: RecentActivity[] = recent.map((activity: { id: string; activities: { id: string; title: string }[]; completed_at: string }) => ({
-          id: activity.id,
-          title: activity.activities?.[0]?.title || 'Actividad',
+        // Procesar actividades recientes de todos los tipos
+        const mechanisms = mechanismsData.data || []
+        const callsRecent = callsRecentData.data || []
+        const activitiesRecent = activitiesRecentData.data || []
+
+        // Formatear mecanismos completados
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const formattedMechanisms: RecentActivity[] = mechanisms.map((mechanism: any) => ({
+          id: mechanism.id,
+          title: `${mechanism.mechanisms?.goals?.description || 'Meta'}: ${mechanism.mechanisms?.description || 'Mecanismo'}`,
           completed: true,
-          date: new Date(activity.completed_at).toLocaleDateString('es-ES'),
-          type: 'activity' as const
+          date: new Date(mechanism.completed_at).toLocaleDateString('es-ES', { timeZone: 'UTC' }),
+          timestamp: new Date(mechanism.completed_at).getTime(),
+          type: 'mechanism' as const
         }))
 
-        // Agregar metas recientes completadas
-        const recentGoals = goals
-          .filter(goal => goal.completed)
-          .slice(0, 3)
-          .map(goal => ({
-            id: goal.id,
-            title: `Meta completada`,
+        // Formatear llamadas completadas (funciona para líderes y supervisores)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const formattedCalls: RecentActivity[] = callsRecent.map((call: any) => {
+          const isLeader = call.leader_id === userId
+          const role = isLeader ? 'como líder' : 'como supervisor'
+          return {
+            id: call.id,
+            title: `Llamada completada ${role} (${call.evaluation_status === 'on_time' ? 'A tiempo' : 
+              call.evaluation_status === 'late' ? 'Tardía' : 
+              call.evaluation_status === 'rescheduled' ? 'Reagendada' : 'No realizada'})`,
             completed: true,
-            date: new Date(goal.created_at).toLocaleDateString('es-ES'),
-            type: 'goal' as const
-          }))
+            date: new Date(call.updated_at).toLocaleDateString('es-ES', { timeZone: 'UTC' }),
+            timestamp: new Date(call.updated_at).getTime(),
+            type: 'call' as const
+          }
+        })
 
-        // Combinar y ordenar actividades recientes
-        const allRecentActivities = [...formattedRecentActivities, ...recentGoals]
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .slice(0, 5)
+        // Formatear actividades completadas
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const formattedActivities: RecentActivity[] = activitiesRecent.map((activity: any) => ({
+          id: activity.id,
+          title: activity.activities?.title || 'Actividad',
+          completed: true,
+          date: new Date(activity.completed_at).toLocaleDateString('es-ES', { timeZone: 'UTC' }),
+          timestamp: new Date(activity.completed_at).getTime(),
+          type: 'activity' as const
+        }))
+        
+        // Combinar y ordenar todas las actividades recientes por fecha
+        const allActivities = [...formattedMechanisms, ...formattedCalls, ...formattedActivities]
+        
+        const allRecentActivities = allActivities
+          .sort((a, b) => {
+            // Usar timestamps exactos para ordenamiento preciso
+            return b.timestamp - a.timestamp
+          })
+          .slice(0, 3) // Solo las 3 más recientes
 
         setStats({
           goalsCompleted,

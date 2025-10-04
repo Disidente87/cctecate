@@ -186,7 +186,7 @@ const frequencyLabels = {
 
 
 export default function MetasPage() {
-  const { selectedUserId, authUserId, authUserRole, isSenior } = useSelectedUser()
+  const { selectedUserId, authUserId, authUserRole, isSenior, isMasterSenior } = useSelectedUser()
   const { activeParticipation, isAdmin } = useActiveParticipation()
   const [goals, setGoals] = useState<GoalWithMechanisms[]>([])
   const [loading, setLoading] = useState(true)
@@ -231,8 +231,13 @@ export default function MetasPage() {
         const viewUserId = selectedUserId || authUserId
         if (viewUserId) {
           setUser({ id: viewUserId })
-          // Usar la participación activa si está disponible
-          const participationId = activeParticipation?.participation_id
+          
+          // Si es un Senior o Master Senior viendo datos de otro usuario, no pasar participationId
+          // para que getUserGoals obtenga la participación activa del usuario seleccionado
+          const participationId = ((isSenior || isMasterSenior) && selectedUserId !== authUserId) 
+            ? undefined 
+            : activeParticipation?.participation_id
+          
           const userGoals = await getUserGoals(viewUserId, participationId)
           
           // Calcular progreso dinámicamente para cada meta
@@ -483,11 +488,27 @@ export default function MetasPage() {
         }
       }
 
-      // Recargar metas
+      // Recargar metas y recalcular progreso
       const viewUserId = selectedUserId || authUserId
       if (viewUserId) {
         const goalsData = await getUserGoals(viewUserId)
-        setGoals(goalsData)
+        
+        // Recalcular el progreso para la meta editada
+        const updatedGoals = await Promise.all(
+          goalsData.map(async (goal) => {
+            if (goal.id === editingGoalData.id) {
+              // Recalcular progreso para la meta que se acaba de editar
+              const progressPercentage = await calculateGoalProgress(goal, viewUserId)
+              return {
+                ...goal,
+                progress_percentage: progressPercentage
+              }
+            }
+            return goal
+          })
+        )
+        
+        setGoals(updatedGoals)
       }
       
       setEditingGoal(null)
@@ -664,8 +685,8 @@ export default function MetasPage() {
 
       {/* Add Goal Button */}
       <div className="mb-6">
-        {isSenior && selectedUserId !== authUserId ? (
-          // Senior viendo datos de un líder - deshabilitar creación de metas
+        {(isSenior || isMasterSenior) && selectedUserId !== authUserId ? (
+          // Senior o Master Senior viendo datos de un líder - deshabilitar creación de metas
           <div>
             <Button 
               disabled
@@ -1022,23 +1043,23 @@ export default function MetasPage() {
                       </Button>
                     </div>
                     
-                    <div className="space-y-2">
+                    <div className="space-y-1">
                       {editingGoalData.mechanisms.map((mechanism, index) => (
-                        <div key={mechanism.id} className="flex items-center space-x-2 p-2 bg-white rounded border">
+                        <div key={mechanism.id} className="flex items-center space-x-2 p-2 bg-white rounded">
                           <Input
                             value={mechanism.description}
                             onChange={(e) => handleUpdateEditingMechanism(mechanism.id, 'description', e.target.value)}
                             placeholder="Descripción del mecanismo"
-                            className="flex-1"
+                            className="flex-1 border border-gray-200 shadow-none focus:ring-0 focus:border-gray-300"
                           />
                           <Select
                             value={mechanism.frequency}
                             onValueChange={(value) => handleUpdateEditingMechanism(mechanism.id, 'frequency', value)}
                           >
-                            <SelectTrigger className="w-32">
+                            <SelectTrigger className="w-32 bg-white border border-gray-300">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-white">
                               {Object.entries(frequencyLabels).map(([value, label]) => (
                                 <SelectItem key={value} value={value}>
                                   {label}
@@ -1070,6 +1091,7 @@ export default function MetasPage() {
                     <Button
                       variant="outline"
                       onClick={handleCancelEditing}
+                      className="bg-red-600 hover:bg-red-700 text-white border-red-600"
                     >
                       <X className="h-4 w-4 mr-1" />
                       Cancelar
@@ -1077,6 +1099,7 @@ export default function MetasPage() {
                     <Button
                       onClick={handleSaveEditing}
                       disabled={loading}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
                       <Save className="h-4 w-4 mr-1" />
                       {loading ? 'Guardando...' : 'Guardar'}
