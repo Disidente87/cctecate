@@ -21,7 +21,7 @@ const colorClasses = {
   yellow: 'bg-yellow-500 text-white',
   red: 'bg-red-500 text-white',
   blue: 'bg-blue-500 text-white',
-  gray: 'bg-gray-400 text-white'
+  gray: 'bg-gray-600 text-white'
 }
 
 export function CallCalendar({ userId, onCallClick, canEvaluateCalls = false }: CallCalendarProps) {
@@ -207,11 +207,11 @@ export function CallCalendar({ userId, onCallClick, canEvaluateCalls = false }: 
               </div>
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded bg-blue-500"></div>
-                <span>Pendiente de Evaluación</span>
+                <span>Pendiente (Ya pasó)</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-gray-400"></div>
-                <span>Futura</span>
+                <div className="w-3 h-3 rounded bg-gray-600"></div>
+                <span>Pendiente (Futura)</span>
               </div>
             </div>
           </div>
