@@ -96,24 +96,24 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
     : baseNavigation
 
   return (
-    <nav className="bg-white shadow-sm border-b border-gray-200">
+    <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <div className="flex-shrink-0 flex items-center">
               <Link href="/portal" className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-lg"></div>
-                <span className="text-xl font-bold ">CC Portal</span>
+                <span className="text-xl font-bold text-gray-900">CC Portal</span>
               </Link>
             </div>
             
             {/* Desktop Navigation */}
-            <div className="hidden md:ml-6 md:flex md:space-x-8">
+            <div className="hidden lg:ml-6 lg:flex lg:space-x-8">
               {navigation.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className=" hover: px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 px-3 py-2 rounded-md text-sm font-medium transition-colors"
                 >
                   {item.name}
                 </Link>
@@ -121,43 +121,46 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-            {/* User Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                    <User className="h-4 w-4 text-primary-600" />
+          <div className="flex items-center space-x-2 md:space-x-4">
+            {/* Desktop User Menu */}
+            <div className="hidden lg:block">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                      <User className="h-4 w-4 text-primary-600" />
+                    </div>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56 bg-white border border-gray-200 shadow-lg" align="end">
+                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+                    <p className="text-sm font-medium text-gray-900">{userProfile?.name || user?.user_metadata?.name || user?.email}</p>
+                    <p className="text-xs text-gray-600">{userProfile?.role || userRole || 'Usuario'}</p>
                   </div>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 bg-white border border-gray-200 shadow-lg" align="end">
-                <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
-                  <p className="text-sm font-medium ">{userProfile?.name || user?.user_metadata?.name || user?.email}</p>
-                  <p className="text-xs ">{userProfile?.role || userRole || 'Usuario'}</p>
-                </div>
-                <DropdownMenuItem className="hover:bg-gray-50">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Configuración
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-gray-50" onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Cerrar Sesión
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem className="hover:bg-gray-50 cursor-pointer">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Configuración
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-gray-50 cursor-pointer" onClick={handleLogout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Cerrar Sesión
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
             {/* Mobile menu button */}
-            <div className="md:hidden">
+            <div className="lg:hidden">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="p-2"
               >
                 {isMenuOpen ? (
-                  <X className="h-6 w-6" />
+                  <X className="h-5 w-5" />
                 ) : (
-                  <Menu className="h-6 w-6" />
+                  <Menu className="h-5 w-5" />
                 )}
               </Button>
             </div>
@@ -166,18 +169,43 @@ export default function PortalNavbar({ user }: PortalNavbarProps) {
 
         {/* Mobile Navigation */}
         {isMenuOpen && (
-          <div className="md:hidden">
-            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t border-gray-200">
-              {navigation.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className=" hover: block px-3 py-2 rounded-md text-base font-medium"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  {item.name}
-                </Link>
-              ))}
+          <div className="lg:hidden">
+            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t border-gray-200 bg-white">
+              {navigation.map((item) => {
+                const IconComponent = item.icon
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 flex items-center px-3 py-3 rounded-md text-base font-medium transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <IconComponent className="h-5 w-5 mr-3" />
+                    {item.name}
+                  </Link>
+                )
+              })}
+              
+              {/* Mobile User Info and Actions */}
+              <div className="border-t border-gray-200 mt-3 pt-3">
+                <div className="px-3 py-2 mb-2">
+                  <p className="text-sm font-medium text-gray-900">{userProfile?.name || user?.user_metadata?.name || user?.email}</p>
+                  <p className="text-xs text-gray-600">{userProfile?.role || userRole || 'Usuario'}</p>
+                </div>
+                <div className="space-y-1">
+                  <button className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 flex items-center w-full px-3 py-3 rounded-md text-base font-medium transition-colors">
+                    <Settings className="h-5 w-5 mr-3" />
+                    Configuración
+                  </button>
+                  <button 
+                    onClick={handleLogout}
+                    className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 flex items-center w-full px-3 py-3 rounded-md text-base font-medium transition-colors"
+                  >
+                    <LogOut className="h-5 w-5 mr-3" />
+                    Cerrar Sesión
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

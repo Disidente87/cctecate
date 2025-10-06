@@ -111,7 +111,7 @@ export default function PortalDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Metas Completadas</CardTitle>
@@ -171,18 +171,23 @@ export default function PortalDashboard() {
         {/* Quick Actions */}
         <div>
           <h2 className="text-xl font-semibold  mb-6">Acciones Rápidas</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">
             {quickActions.map((action) => (
               <Link key={action.title} href={action.href}>
                 <Card className="hover:shadow-md transition-shadow cursor-pointer">
                   <CardContent className="p-6">
-                    <div className="flex items-start space-x-4">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${action.color}`}>
-                        <action.icon className="h-5 w-5" />
+                    <div className="flex flex-col sm:flex-row sm:items-start space-y-3 sm:space-y-0 sm:space-x-4">
+                      <div className="flex items-center space-x-3 sm:flex-col sm:items-center sm:space-x-0">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${action.color}`}>
+                          <action.icon className="h-5 w-5" />
+                        </div>
+                        <div className="sm:hidden">
+                          <h3 className="font-semibold">{action.title}</h3>
+                        </div>
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-semibold  mb-1">{action.title}</h3>
-                        <p className="text-sm ">{action.description}</p>
+                        <h3 className="font-semibold mb-1 hidden sm:block">{action.title}</h3>
+                        <p className="text-sm">{action.description}</p>
                       </div>
                     </div>
                   </CardContent>

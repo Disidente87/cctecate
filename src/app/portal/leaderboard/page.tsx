@@ -4,6 +4,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu'
+import { 
   Trophy, 
   Medal, 
   Award, 
@@ -208,7 +214,7 @@ export default function LeaderboardPage() {
 
       {/* Stats Overview */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium ">Total Participantes</CardTitle>
@@ -283,7 +289,8 @@ export default function LeaderboardPage() {
           ))}
         </div>
 
-        <div className="flex items-center space-x-2">
+        {/* Desktop Sort Buttons */}
+        <div className="hidden md:flex items-center space-x-2">
           <span className="text-sm ">Ordenar por:</span>
           <Button
             variant="outline"
@@ -321,6 +328,36 @@ export default function LeaderboardPage() {
             <span>Llamadas</span>
             {getSortIcon('calls')}
           </Button>
+        </div>
+
+        {/* Mobile Sort Dropdown */}
+        <div className="md:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                <span>Ordenar por: {sortBy === 'total' ? 'Total' : sortBy === 'goals' ? 'Metas' : sortBy === 'activities' ? 'Actividades' : 'Llamadas'}</span>
+                <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 bg-white border border-gray-200 shadow-lg">
+              <DropdownMenuItem onClick={() => handleSort('total')} className="flex items-center justify-between hover:bg-gray-50 cursor-pointer">
+                <span>Total</span>
+                {sortBy === 'total' && getSortIcon('total')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort('goals')} className="flex items-center justify-between hover:bg-gray-50 cursor-pointer">
+                <span>Metas</span>
+                {sortBy === 'goals' && getSortIcon('goals')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort('activities')} className="flex items-center justify-between hover:bg-gray-50 cursor-pointer">
+                <span>Actividades</span>
+                {sortBy === 'activities' && getSortIcon('activities')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort('calls')} className="flex items-center justify-between hover:bg-gray-50 cursor-pointer">
+                <span>Llamadas</span>
+                {sortBy === 'calls' && getSortIcon('calls')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -369,11 +406,11 @@ export default function LeaderboardPage() {
                   </div>
                 </div>
 
-                <div className="text-right">
+                <div className="text-right hidden md:block">
                   <div className="text-2xl font-bold ">
                     {entry.total_score.toFixed(1)}
                   </div>
-                  <div className="text-sm ">
+                  <div className="text-sm hidden md:block">
                     puntos totales
                   </div>
                 </div>
